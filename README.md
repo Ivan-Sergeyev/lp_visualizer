@@ -75,3 +75,30 @@
     - Vertices solid blue circles
     - Solid blue thick line segments defining feasible region
     - If unbounded, automatically rescale infinite portion depending on plot zoom level
+  - Optional feature: toggle between auto and manual re-optimization
+    - Toggle auto: model re-solved on every update
+    - Toggle manual: model re-solved only on button press
+
+## Control Flow
+
+### User Action -> Model
+
+change sense -> update model sense
+change objective coefficient -> update model objective coefficient
+add constraint -> add model constraint
+delete constraint -> delete model constraint
+enable constraint -> enable model constraint
+disable constraint -> disnable model constraint
+change constraint coefficient -> update model constraint coefficient
+change constraint sense -> update model constraint sense
+
+### Model -> Plot
+
+update model sense -> update objective vector (flip direction), update solution
+update model objective coefficient -> update objective vector (change direction), update solution
+add constraint -> update polyhedron (add line, update vertices, update feasible region), update solution
+delete constraint -> update polyhedron (delete line, update vertices, update feasible region), update solution
+enable model constraint -> update polyhedron (make line solid, update vertices, update feasible region), update solution
+disable model constraint -> update polyhedron (make line dashed, update vertices, update feasible region), update solution
+update model constraint coefficient -> update polyhedron (change line, update vertices, update feasible region), update solution
+update model constraint sense -> update polyhedron (update feasible region), update solution
