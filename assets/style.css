@@ -1,0 +1,90 @@
+/* General layout and component styling for LP Visualizer */
+
+/* Container for the entire model (objective function and constraints) */
+#model-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+/* Container for the objective function row */
+#objective-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 35px;
+}
+
+/* Style for the objective function sense dropdown (max/min) */
+#objective-sense {
+    width: 80px;
+    text-align: center;
+    display: inline-block;
+}
+
+/* Container for the constraints */
+#constraints-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Style for the 's.t.' label */
+.st-label {
+    width: 80px;
+    flex-shrink: 0;
+    text-align: center;
+    display: inline-block;
+    height: 35px;
+}
+
+/* Container for all constraints */
+#constraints-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Container for constraint rows */
+.constraint-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 35px;
+}
+
+/* Common style for coefficient inputs */
+.coeff-input {
+    width: 80px;
+    text-align: right !important; /* Bug: doesn't work in Dash. */
+    display: inline-block;
+}
+
+/* Style for variable labels (x, y) */
+.variable-label {
+    width: 10px;
+    text-align: center;
+    display: inline-block;
+}
+
+/* Style for the sign between terms (+, -) */
+.sign-label {
+    width: 10px;
+    text-align: center;
+    display: inline-block;
+}
+
+/* Style for the constraint sense dropdown (<=, >=, =) */
+.constraint-sense {
+    width: 70px;
+    text-align: center;
+    display: inline-block;
+}
+
+/* Style for the solution value display */
+#solution-value {
+    margin-top: 20px;
+    font-size: 18px;
+}

@@ -1,21 +1,21 @@
 [project]
-name = "lp-visualizer"
-version = "0.1.0"
-requires-python = "==3.14.4"
+name = 'lp-visualizer'
+version = '0.1.0'
+requires-python = '==3.14.4'
 dependencies = [
-    "dash==4.1.0",
-    "plotly==6.7.0",
-    "mip==1.17.6",
+    'dash==4.1.0',
+    'plotly==6.7.0',
+    'mip==1.17.6',
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "ruff",
+    'pytest',
+    'ruff',
 ]
 
 [tool.ruff]
 line-length = 88
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ['tests']

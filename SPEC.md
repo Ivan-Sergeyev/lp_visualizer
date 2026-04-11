@@ -133,13 +133,13 @@ grid or a flex row with fixed widths; do not use a `<table>`.
 
 #### Objective row (row 0)
 
-- Col A: `dcc.Dropdown` with options `[{"label": "min", "value": "min"}, {"label": "max",
-  "value": "max"}]`, default `"min"`, `id="obj-sense"`, no clearable.
-- Col B: `dcc.Input`, type `"number"`, default `1`, `id="obj-cx"`.
-- Col C: `"x"`.
-- Col D: `"+"`.
-- Col E: `dcc.Input`, type `"number"`, default `1`, `id="obj-cy"`.
-- Col F: `"y"`.
+- Col A: `dcc.Dropdown` with options `[{'label': 'min', 'value': 'min'}, {'label': 'max',
+  'value': 'max'}]`, default `'min'`, `id='obj-sense'`, no clearable.
+- Col B: `dcc.Input`, type `'number'`, default `1`, `id='obj-cx'`.
+- Col C: `'x'`.
+- Col D: `'+'`.
+- Col E: `dcc.Input`, type `'number'`, default `1`, `id='obj-cy'`.
+- Col F: `'y'`.
 - Cols G, H: empty spacers (same width as constraint counterparts to maintain alignment).
 
 #### Constraint rows
@@ -149,29 +149,29 @@ by `lp_state`, identified by its stable integer id.
 
 Component ids use the constraint's stable integer id as a suffix:
 
-- `"cx-{id}"`, `"cy-{id}"`, `"sense-{id}"`, `"rhs-{id}"`
+- `'cx-{id}'`, `'cy-{id}'`, `'sense-{id}'`, `'rhs-{id}'`
 
-- Col A: `"s.t."` for the **first** rendered constraint row; blank for all others.
+- Col A: `'s.t.'` for the **first** rendered constraint row; blank for all others.
 - Cols B–F: same structure as objective row but using per-constraint ids.
-- Col G: `dcc.Dropdown` with options `<=`, `>=`, `=`; default `<=`; `id="sense-{id}"`.
-- Col H: `dcc.Input`, type `"number"`, default `0`, `id="rhs-{id}"`.
+- Col G: `dcc.Dropdown` with options `<=`, `>=`, `=`; default `<=`; `id='sense-{id}'`.
+- Col H: `dcc.Input`, type `'number'`, default `0`, `id='rhs-{id}'`.
 
-#### "Add constraint" button
+#### 'Add constraint' button
 
 Placed below all constraint rows.
 
-- `id="add-constraint-btn"`, label `"+ Add constraint"`.
+- `id='add-constraint-btn'`, label `'+ Add constraint'`.
 - On click: calls `lp_state.add_constraint()`, then appends a new blank constraint row to the
   constraint container (handled in the corresponding `app.py` callback).
 
 ### 5.3 Plot Panel (right)
 
-- `dcc.Graph(id="lp-graph")` taking most of the vertical space.
-- Below the graph: a `html.Div(id="solution-text")` showing one of:
-  - `"Optimal value: {v}"` where `{v}` is the objective value rounded to 4 significant figures.
-  - `"Unbounded"`
-  - `"Infeasible"`
-  - `""` (empty) when there are no constraints.
+- `dcc.Graph(id='lp-graph')` taking most of the vertical space.
+- Below the graph: a `html.Div(id='solution-text')` showing one of:
+  - `'Optimal value: {v}'` where `{v}` is the objective value rounded to 4 significant figures.
+  - `'Unbounded'`
+  - `'Infeasible'`
+  - `''` (empty) when there are no constraints.
 
 ---
 
@@ -184,7 +184,7 @@ both directions. Trust `python-mip`'s results directly — no workarounds or ver
 re-solves are needed.
 
 If there are **zero constraints**, skip solving entirely and set `status` to a sentinel
-value that `plot_callbacks` treats as "no solution".
+value that `plot_callbacks` treats as 'no solution'.
 
 ### 6.1 Result interpretation
 
@@ -193,10 +193,10 @@ the returned status:
 
 | `status` | `lp_state.status` | `solution_text` (for plot) | Red dot |
 | --- | --- | --- | --- |
-| `mip.OptimizationStatus.OPTIMAL` | `"optimal"` | `"Optimal value: {objective_value:.4g}"` | Yes, at `(x_opt, y_opt)` |
-| `mip.OptimizationStatus.INFEASIBLE` | `"infeasible"` | `"Infeasible"` | No |
-| `mip.OptimizationStatus.UNBOUNDED` | `"unbounded"` | `"Unbounded"` | No |
-| zero constraints | `"none"` | `""` | No |
+| `mip.OptimizationStatus.OPTIMAL` | `'optimal'` | `'Optimal value: {objective_value:.4g}'` | Yes, at `(x_opt, y_opt)` |
+| `mip.OptimizationStatus.INFEASIBLE` | `'infeasible'` | `'Infeasible'` | No |
+| `mip.OptimizationStatus.UNBOUNDED` | `'unbounded'` | `'Unbounded'` | No |
+| zero constraints | `'none'` | `''` | No |
 
 ---
 
@@ -212,7 +212,7 @@ properties (`state.status`, `state.objective_value`, `state.x_opt`, `state.y_opt
 
 - Equal aspect ratio is **not** required.
 - Default axis range: `[-10, 10]` for both x and y on first render.
-- `uirevision="lp"` on the figure layout so that user pan/zoom is preserved between updates.
+- `uirevision='lp'` on the figure layout so that user pan/zoom is preserved between updates.
 - No legend.
 - Minimal margins.
 
@@ -235,13 +235,13 @@ Given constraint `a·x + b·y ≤/≥/= rhs`, the boundary line is `a·x + b·y 
 ```python
 go.Scatter(
     x=[x0, x1], y=[y0, y1],
-    mode="lines",
-    line=dict(color="black", width=1),
-    hoverinfo="skip"
+    mode='lines',
+    line=dict(color='black', width=1),
+    hoverinfo='skip'
 )
 ```
 
-**Making lines "infinite":** The current axis range is not available inside a callback
+**Making lines 'infinite':** The current axis range is not available inside a callback
 directly. Use a fixed wide range (e.g. `[-1000, 1000]`) to compute line endpoints; Plotly
 will clip them to the visible area automatically. Set `cliponaxis=True` (default).
 
@@ -252,7 +252,7 @@ direction of optimisation.
 
 Implementation:
 
-- Use a `go.Scatter` trace in **paper coordinates** (i.e. `xref="paper"`, `yref="paper"`)
+- Use a `go.Scatter` trace in **paper coordinates** (i.e. `xref='paper'`, `yref='paper'`)
   placed in the bottom-left corner (paper coords `[0.02, 0.15] × [0.02, 0.15]`).
 - Draw a box outline as a rectangle annotation or a closed scatter path.
 - Draw an arrow using a Plotly `annotation` with `arrowhead=2`, `ax`/`ay` set so the arrow
@@ -261,10 +261,10 @@ Implementation:
 Arrow direction:
 
 - Let `(cx, cy)` be the objective coefficients.
-- If `sense == "min"`, the gradient points in direction `(cx, cy)` (we minimise, so the
+- If `sense == 'min'`, the gradient points in direction `(cx, cy)` (we minimise, so the
   optimal moves opposite, but the convention is to draw the gradient arrow).
   - TODO: confirm with human which direction the arrow should point — gradient direction
-    `(cx, cy)`, or the "improving" direction.
+    `(cx, cy)`, or the 'improving' direction.
 - Normalise `(cx, cy)` to length 1, scale to a fixed pixel length (e.g. 40 px) using `ax`/`ay`.
 - If `cx == 0` and `cy == 0`, draw a dot (zero vector) in the centre of the box.
 
@@ -275,9 +275,9 @@ If status is `OPTIMAL`:
 ```python
 go.Scatter(
     x=[x_opt], y=[y_opt],
-    mode="markers",
-    marker=dict(color="red", size=10, symbol="circle"),
-    hoverinfo="skip"
+    mode='markers',
+    marker=dict(color='red', size=10, symbol='circle'),
+    hoverinfo='skip'
 )
 ```
 
@@ -322,14 +322,14 @@ user_callbacks.register(app)
 
 ```python
 @app.callback(
-    Output("lp-graph", "figure"),
-    Input("obj-sense", "value"),
-    Input("obj-cx",    "value"),
-    Input("obj-cy",    "value"),
+    Output('lp-graph', 'figure'),
+    Input('obj-sense', 'value'),
+    Input('obj-cx',    'value'),
+    Input('obj-cy',    'value'),
 )
 def on_objective_change(sense, cx, cy):
     return lp_state.set_objective(
-        sense or "min",
+        sense or 'min',
         float(cx or 0),
         float(cy or 0),
     )
@@ -341,28 +341,28 @@ Because constraint component ids are dynamic, use **pattern-matching callbacks**
 wildcard). Structure constraint component ids as dicts:
 
 ```python
-{"type": "cx",    "index": constraint_id}
-{"type": "cy",    "index": constraint_id}
-{"type": "sense", "index": constraint_id}
-{"type": "rhs",   "index": constraint_id}
+{'type': 'cx',    'index': constraint_id}
+{'type': 'cy',    'index': constraint_id}
+{'type': 'sense', 'index': constraint_id}
+{'type': 'rhs',   'index': constraint_id}
 ```
 
 ```python
 @app.callback(
-    Output("lp-graph", "figure"),
-    Input({"type": "cx",    "index": ALL}, "value"),
-    Input({"type": "cy",    "index": ALL}, "value"),
-    Input({"type": "sense", "index": ALL}, "value"),
-    Input({"type": "rhs",   "index": ALL}, "value"),
-    State({"type": "cx",    "index": ALL}, "id"),
+    Output('lp-graph', 'figure'),
+    Input({'type': 'cx',    'index': ALL}, 'value'),
+    Input({'type': 'cy',    'index': ALL}, 'value'),
+    Input({'type': 'sense', 'index': ALL}, 'value'),
+    Input({'type': 'rhs',   'index': ALL}, 'value'),
+    State({'type': 'cx',    'index': ALL}, 'id'),
 )
 def on_constraint_change(cxs, cys, senses, rhss, ids):
     result = None
     for id_dict, cx, cy, sense, rhs in zip(ids, cxs, cys, senses, rhss):
         result = lp_state.set_constraint(
-            id_dict["index"],
+            id_dict['index'],
             float(cx or 0), float(cy or 0),
-            sense or "<=",  float(rhs or 0),
+            sense or '<=',  float(rhs or 0),
         )
     return result  # last patch / figure; all patches share the same state snapshot
 ```
@@ -371,9 +371,9 @@ def on_constraint_change(cxs, cys, senses, rhss, ids):
 
 ```python
 @app.callback(
-    Output("constraints-container", "children"),
-    Input("add-constraint-btn", "n_clicks"),
-    State("constraints-container", "children"),
+    Output('constraints-container', 'children'),
+    Input('add-constraint-btn', 'n_clicks'),
+    State('constraints-container', 'children'),
     prevent_initial_call=True,
 )
 def on_add_constraint(_, existing_rows):
@@ -393,7 +393,7 @@ def on_add_constraint(_, existing_rows):
 | Situation | Expected behaviour |
 | --- | --- |
 | Input field is empty | Treat coefficient/RHS as `0.0` |
-| Input field has non-numeric text | Treat as `0.0` (Dash `type="number"` prevents most cases) |
+| Input field has non-numeric text | Treat as `0.0` (Dash `type='number'` prevents most cases) |
 | Zero constraints | No solving; empty solution text; plot shows only objective vector box |
 | `cx=0, cy=0` in a constraint | Constraint is degenerate; include it in solver (it will be trivially satisfied or infeasible depending on `rhs` and sense) |
 | Objective `cx=0, cy=0` | Arrow in box is a dot; solver still runs |
@@ -414,11 +414,11 @@ interact only through the public interface; do not inspect internal model fields
 
 | Test | Action | Expected result |
 | --- | --- | --- |
-| Default status | instantiate `LPState` with no constraints | `status == "none"` |
-| Solve updates status | call `set_objective` then `add_constraint` with a valid bounded LP | `status == "optimal"` |
+| Default status | instantiate `LPState` with no constraints | `status == 'none'` |
+| Solve updates status | call `set_objective` then `add_constraint` with a valid bounded LP | `status == 'optimal'` |
 | `add_constraint` returns distinct ids | call `add_constraint()` twice | returned ids are different integers |
-| Infeasible LP | add two contradictory constraints | `status == "infeasible"` |
-| Unbounded LP | set objective with no bounding constraints | `status == "unbounded"` |
+| Infeasible LP | add two contradictory constraints | `status == 'infeasible'` |
+| Unbounded LP | set objective with no bounding constraints | `status == 'unbounded'` |
 
 ### `test_plot_updates.py`
 
@@ -426,11 +426,11 @@ Test `build_figure` and the solve logic inside `plot_callbacks.py` directly.
 
 | Test | `LPState` | Expected solution text | Expected dot coords |
 | --- | --- | --- | --- |
-| Simple bounded LP | min x+y, x+y>=2, x>=0, y>=0 | `"Optimal value: 2"` | any point on x+y=2, x,y≥0 |
-| Infeasible | min x+y, x>=5, x<=3 | `"Infeasible"` | none |
-| Unbounded | min x, no upper bound | `"Unbounded"` | none |
-| No constraints | min x+y | `""` | none |
-| Zero-coefficient objective | min 0x+0y, x+y>=1 | `"Optimal value: 1"` | any optimal point |
+| Simple bounded LP | min x+y, x+y>=2, x>=0, y>=0 | `'Optimal value: 2'` | any point on x+y=2, x,y≥0 |
+| Infeasible | min x+y, x>=5, x<=3 | `'Infeasible'` | none |
+| Unbounded | min x, no upper bound | `'Unbounded'` | none |
+| No constraints | min x+y | `''` | none |
+| Zero-coefficient objective | min 0x+0y, x+y>=1 | `'Optimal value: 1'` | any optimal point |
 
 ---
 

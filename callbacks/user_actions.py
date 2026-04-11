@@ -1,6 +1,16 @@
-# User action callbacks
+# def register(app):
 
-def user_change_sense():
+#     @app.callback(...)
+#     def on_objective_change(...): ...
+
+#     @app.callback(...)
+#     def on_constraint_change(...): ...
+
+#     @app.callback(...)
+#     def on_add_constraint(...): ...
+
+
+def user_change_lp_sense():
     pass
 
 def user_change_objective():
@@ -21,7 +31,7 @@ def user_toggle_constraint():
 def user_change_constraint_coefficients():
     pass
 
-def user_change_constraint_sign():
+def user_change_constraint_sense():
     pass
 
 def user_init():
