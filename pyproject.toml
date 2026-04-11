@@ -19,3 +19,6 @@ line-length = 88
 
 [tool.pytest.ini_options]
 testpaths = ['tests']
+
+[tool.setuptools]
+py-modules = []
