@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from numbers import Real
 from typing import Tuple
 
 import mip
