@@ -88,3 +88,39 @@
     margin-top: 20px;
     font-size: 18px;
 }
+
+/* Style for the "Add Constraint" button */
+.add-constraint-button {
+    background-color: green;
+    border-radius: 8px;
+    border: none;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    height: 35px;
+}
+
+/* Style for the "Add Constraint" button on hover */
+.add-constraint-button:hover {
+    background-color: darkgreen;
+}
+
+/* Style for the "Remove Constraint" button */
+.remove-constraint-button {
+    background-color: red;
+    border-radius: 8px;
+    border: none;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    height: 35px;
+}
+
+/* Style for the "Remove Constraint" button on hover */
+.remove-constraint-button:hover {
+    background-color: darkred;
+}
