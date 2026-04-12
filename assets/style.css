@@ -1,11 +1,27 @@
 /* General layout and component styling for LP Visualizer */
 
+#app-wrapper {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    align-items: center;
+}
+
 /* Container for the entire model (objective function and constraints) */
-#model-container {
+#left-panel {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 45%;
+}
+
+#model-wrapper {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
+    flex: 1;
+    min-width: 100%;
 }
 
 /* Container for the objective function row */
@@ -24,7 +40,7 @@
 }
 
 /* Container for the constraints */
-#constraints-container {
+#constraints-wrapper {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -123,4 +139,9 @@
 /* Style for the "Remove Constraint" button on hover */
 .remove-constraint-button:hover {
     background-color: darkred;
+}
+
+#right-panel {
+    flex: 1;
+    min-width: 50%;
 }

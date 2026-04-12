@@ -7,19 +7,37 @@ import mip
 
 @dataclass
 class ObjectiveDict:
+    sense: str
     x_coeff: float
     y_coeff: float
-    sense: str
 
+    @classmethod
+    def from_mip(cls, objective: mip.LinExpr, sense: str, x: mip.Var, y: mip.Var) -> ObjectiveDict:
+        return cls(
+            sense=ObjectiveDict.sense_to_ui(sense),
+            x_coeff=objective.expr.get(x, 0.),
+            y_coeff=objective.expr.get(y, 0.),
+        )
 
-def objective_sense_to_mip(sense: str) -> str:
-    match sense:
-        case 'max' | mip.MAXIMIZE:
-            return mip.MAXIMIZE
-        case 'min' | mip.MINIMIZE:
-            return mip.MINIMIZE
-        case _:
-            raise ValueError(f'Unrecognized objective sense {sense}.')
+    @staticmethod
+    def sense_to_mip(sense: str) -> str:
+        match sense:
+            case 'max' | mip.MAXIMIZE:
+                return mip.MAXIMIZE
+            case 'min' | mip.MINIMIZE:
+                return mip.MINIMIZE
+            case _:
+                raise ValueError(f'Unrecognized objective sense {sense}.')
+
+    @staticmethod
+    def sense_to_ui(sense: str) -> str:
+        match sense:
+            case 'max' | mip.MAXIMIZE:
+                return 'max'
+            case 'min' | mip.MINIMIZE:
+                return 'min'
+            case _:
+                raise ValueError(f'Unrecognized objective sense {sense}.')
 
 
 @dataclass
@@ -30,9 +48,9 @@ class ConstraintDict:
     sense: str
     rhs: float
 
-    @property
-    def sense_mip(self) -> str:
-        match self.sense:
+    @staticmethod
+    def sense_to_mip(sense) -> str:
+        match sense:
             case '<' | '<=' | '≤' | mip.LESS_OR_EQUAL:
                 return mip.LESS_OR_EQUAL
             case '>' | '>=' | '≥' | mip.GREATER_OR_EQUAL:
@@ -40,55 +58,54 @@ class ConstraintDict:
             case '=' | '==' | mip.EQUAL:
                 return mip.EQUAL
             case _:
-                raise ValueError(f'Unrecognized constraint sense {self.sense}.')
+                raise ValueError(f'Unrecognized constraint sense {sense}.')
 
-    def convert_sense_to_mip(self):
-        self.sense = self.sense_mip()
+    @staticmethod
+    def sense_to_ui(sense) -> str:
+        match sense:
+            case '<' | '<=' | '≤' | mip.LESS_OR_EQUAL:
+                return '≤'
+            case '>' | '>=' | '≥' | mip.GREATER_OR_EQUAL:
+                return '≥'
+            case '=' | '==' | mip.EQUAL:
+                return '='
+            case _:
+                raise ValueError(f'Unrecognized constraint sense {sense}.')
 
+    def __init__(self, name: str, x_coeff: float = 0., y_coeff: float = 0, sense: str = '<=', rhs:float = 0.):
+        self.name = name
+        self.x_coeff = x_coeff
+        self.y_coeff = y_coeff
+        self.sense = ConstraintDict.sense_to_ui(sense)
+        self.rhs = rhs
 
-def constraint_dict_from_mip(constraint: mip.Constr, x: mip.Var, y: mip.Var) -> ConstraintDict:
-    return ConstraintDict(
-        name=get_mip_constraint_name(constraint),
-        x_coeff=get_mip_constraint_coeff(constraint, x),
-        y_coeff=get_mip_constraint_coeff(constraint, y),
-        sense=get_mip_constraint_sense(constraint),
-        rhs=get_mip_constraint_rhs(constraint)
-    )
+    @classmethod
+    def from_mip(cls, constraint: mip.Constr, x: mip.Var, y: mip.Var) -> ConstraintDict:
+        return cls(
+            name=constraint.name,
+            x_coeff=constraint.expr.expr.get(x, 0.),
+            y_coeff=constraint.expr.expr.get(y, 0.),
+            sense=ConstraintDict.sense_to_ui(constraint.expr.sense),
+            rhs=constraint.rhs,
+        )
 
+    def to_lin_expr(self, x: mip.Var, y: mip.Var) -> mip.LinExpr:
+        return mip.LinExpr(
+            variables=[x, y],
+            coeffs=[self.x_coeff, self.y_coeff],
+            sense=ConstraintDict.sense_to_mip(self.sense),
+            const=-self.rhs,
+        )
 
-def get_mip_constraint_name(constraint: mip.Constr) -> str:
-    return constraint.name
-
-
-def get_mip_constraint_coeff(constraint: mip.Constr, variable: mip.Var) -> float:
-    return constraint.expr.expr.get(variable, 0.)
-
-
-def get_mip_constraint_sense(constraint: mip.Constr) -> str:
-    return constraint.expr.sense
-
-
-def get_mip_constraint_rhs(constraint: mip.Constr) -> float:
-    return constraint.rhs
-
-
-def deconstruct_mip_constraint(constraint: mip.Constr, x: mip.Var, y: mip.Var) -> Tuple[str, float, float, str, float]:
-    name = get_mip_constraint_name(constraint)
-    x_coeff = get_mip_constraint_coeff(constraint, x)
-    y_coeff = get_mip_constraint_coeff(constraint, y)
-    sense = get_mip_constraint_sense(constraint)
-    rhs = get_mip_constraint_rhs(constraint)
-    return name, x_coeff, y_coeff, sense, rhs
 
 
 @dataclass
 class ModelState:
     model: mip.Model
 
-    def __init__(
-            self,
-            objective: ObjectiveDict = ObjectiveDict(x_coeff=0.0, y_coeff=0.0, sense='max'),
-            constraints: list[ConstraintDict] = []):
+    def __init__(self,
+                 objective: ObjectiveDict,
+                 constraints: list[ConstraintDict]):
         self.model = mip.Model(sense=mip.MAXIMIZE, solver_name=mip.CBC)
 
         self.x = self.model.add_var(name='x', lb=-mip.INF, ub=mip.INF, var_type=mip.CONTINUOUS)
@@ -109,7 +126,7 @@ class ModelState:
             print(line.strip())
 
         status = self.model.optimize()
-        self.__debug()
+        self._debug()
 
         match status:
             case mip.OptimizationStatus.OPTIMAL:
@@ -131,8 +148,8 @@ class ModelState:
                 # todo: display error message
                 pass
 
-    def __debug(self):
-        print(self.model.objective)
+    def _debug(self):
+        print(self.model.sense, self.model.objective)
         for constraint in self.model.constrs:
             print(constraint)
 
@@ -140,7 +157,7 @@ class ModelState:
         self.model.objective = mip.LinExpr(variables=[self.x, self.y], coeffs=[x_coeff, y_coeff])
 
     def _update_sense(self, sense: str):
-        self.model.sense = objective_sense_to_mip(sense)
+        self.model.sense = ObjectiveDict.sense_to_mip(sense)
 
     def _get_constraint(self, name: str) -> mip.Constr:
         print(f'looking for constr {name}')
@@ -155,12 +172,7 @@ class ModelState:
         return constraint
 
     def _add_constraint(self, constraint: ConstraintDict):
-        lin_expr = mip.LinExpr(
-            variables=[self.x, self.y],
-            coeffs=[constraint.x_coeff, constraint.y_coeff],
-            sense=constraint.sense_mip,
-            const=-constraint.rhs,
-        )
+        lin_expr = constraint.to_lin_expr(self.x, self.y)
         self.model.add_constr(lin_expr, name=constraint.name)
 
     def _remove_constraint(self, constraint: mip.Constr):
@@ -168,21 +180,21 @@ class ModelState:
 
     def _update_constraint_x_coeff(self, constraint: mip.Constr, x_coeff: float):
         # note: constraint coeffs cannot be updated in-place in mip, so remove and re-add constraint with new coeffs
-        updated_constraint = constraint_dict_from_mip(constraint, self.x, self.y)
+        updated_constraint = ConstraintDict.from_mip(constraint, self.x, self.y)
         updated_constraint.x_coeff = x_coeff
         self._remove_constraint(constraint)
         self._add_constraint(updated_constraint)
 
     def _update_constraint_y_coeff(self, constraint: mip.Constr, y_coeff: float):
         # note: constraint coeffs cannot be updated in-place in mip, so remove and re-add constraint with new coeffs
-        updated_constraint = constraint_dict_from_mip(constraint, self.x, self.y)
+        updated_constraint = ConstraintDict.from_mip(constraint, self.x, self.y)
         updated_constraint.y_coeff = y_coeff
         self._remove_constraint(constraint)
         self._add_constraint(updated_constraint)
 
     def _update_constraint_sense(self, constraint: mip.Constr, sense: str):
         # note: constraint sense cannot be updated in-place in mip, so remove and re-add constraint with new sense
-        updated_constraint = constraint_dict_from_mip(constraint, self.x, self.y)
+        updated_constraint = ConstraintDict.from_mip(constraint, self.x, self.y)
         updated_constraint.sense = sense
         self._remove_constraint(constraint)
         self._add_constraint(updated_constraint)
@@ -250,3 +262,28 @@ class ModelState:
         # todo: return graph callback result to update solution
 
     # todo: implement constraint toggle logic
+
+    def get_objective(self) -> ObjectiveDict:
+        return ObjectiveDict.from_mip(objective=self.model.objective, sense=self.model.sense, x=self.x, y=self.y)
+
+    def get_constraints(self) -> list[ConstraintDict]:
+        return [
+            ConstraintDict.from_mip(constraint=constraint, x=self.x, y=self.y)
+            for constraint in self.model.constrs
+        ]
+
+    def last_numerical_name(self) -> int:
+        # todo: smarter method that checks numerical names and gives largest taken number
+        return len(self.model.constrs) - 1
+
+
+initial_objective = ObjectiveDict(sense='max', x_coeff=6.0, y_coeff=9.0)
+
+initial_constraints = [
+    ConstraintDict(name='0', x_coeff=2.0, y_coeff=3.0, sense='<=', rhs=12.0),
+    ConstraintDict(name='1', x_coeff=1.0, y_coeff=1.0, sense='<=', rhs=5.0),
+    ConstraintDict(name='2', x_coeff=1.0, y_coeff=0.0, sense='>=', rhs=0.0),
+    ConstraintDict(name='3', x_coeff=0.0, y_coeff=1.0, sense='>=', rhs=0.0),
+]
+
+model_state = ModelState(initial_objective, initial_constraints)
