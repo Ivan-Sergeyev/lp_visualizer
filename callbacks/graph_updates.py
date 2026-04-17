@@ -1,5 +1,4 @@
 import dash
-import math
 import plotly.graph_objects as go
 
 from model.domain_transfer_objects import Constraint, Objective, OptimizationResult
