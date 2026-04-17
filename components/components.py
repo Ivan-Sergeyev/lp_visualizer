@@ -3,10 +3,10 @@ import dash_iconify
 import dash_latex as dl
 import plotly.graph_objects as go
 
-from callbacks.model_state import ConstraintDict, ModelState, ObjectiveDict
+from model.domain_transfer_objects import Constraint, Objective
 
 
-def objective_row_component(objective: ObjectiveDict) -> dash.html.Div:
+def objective_row_component(objective: Objective) -> dash.html.Div:
     return dash.html.Div(
         id='objective-row',
         children=[
@@ -53,7 +53,7 @@ def objective_row_component(objective: ObjectiveDict) -> dash.html.Div:
     )
 
 
-def constraint_row_component(constraint: ConstraintDict) -> dash.html.Div:
+def constraint_row_component(constraint: Constraint) -> dash.html.Div:
     return dash.html.Div(
         id={'type': 'constraint-row', 'name': constraint.name},
         className='constraint-row',
@@ -114,7 +114,7 @@ def constraint_row_component(constraint: ConstraintDict) -> dash.html.Div:
             dash.dcc.Button(
                 id={'type': 'remove-constraint-button', 'name': constraint.name},
                 name=constraint.name,
-                className='remove-constraint-button',
+                className='button remove-constraint-button',
                 title='Remove constraint',
                 children=[
                     dash_iconify.DashIconify(icon='mdi:trash-can-outline')
@@ -125,7 +125,13 @@ def constraint_row_component(constraint: ConstraintDict) -> dash.html.Div:
     )
 
 
-def app_layout(model_state: ModelState) -> dash.html.Div:
+def app_layout(
+    initial_objective: Objective,
+    initial_constraints: list[Constraint],
+    initial_add_constraint_button_n_clicks: int,
+    initial_figure: go.Figure,
+    initial_optimization_result: str,
+) -> dash.html.Div:
     return dash.html.Div(
         id='app-wrapper',
         children=[
@@ -135,7 +141,7 @@ def app_layout(model_state: ModelState) -> dash.html.Div:
                     dash.html.Div(
                         id='model-wrapper',
                         children = [
-                            objective_row_component(model_state.get_objective()),
+                            objective_row_component(initial_objective),
                             dash.html.Div(
                                 id='constraints-wrapper',
                                 children=[
@@ -146,17 +152,17 @@ def app_layout(model_state: ModelState) -> dash.html.Div:
                                     dash.html.Div(
                                         id='constraints-list',
                                         children=[
-                                            constraint_row_component(constraint) for constraint in model_state.get_constraints()
+                                            constraint_row_component(constraint) for constraint in initial_constraints
                                         ] + [
                                             dash.html.Button(
                                                 id='add-constraint-button',
-                                                className='add-constraint-button',
+                                                className='button add-constraint-button',
                                                 title='Add constraint',
                                                 children=[
                                                     'Add constraint',
                                                     # dash_iconify.DashIconify(icon='mdi:plus')
                                                 ],
-                                                n_clicks=model_state.last_numerical_name(),
+                                                n_clicks=initial_add_constraint_button_n_clicks,
                                             ),
                                         ],
                                     ),
@@ -171,13 +177,13 @@ def app_layout(model_state: ModelState) -> dash.html.Div:
                 children=[
                     dash.dcc.Graph(
                         id='graph',
-                        figure=go.Figure(),
+                        figure=initial_figure,
                     ),
                     dash.html.Div(
-                        'Optimal value: ',
-                        id='solution-value',
+                        id='optimization-result',
+                        children=[initial_optimization_result],
                     )
                 ],
             ),
         ],
-)
+    )

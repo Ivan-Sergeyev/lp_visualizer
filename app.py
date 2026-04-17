@@ -1,28 +1,59 @@
 import dash
+import os
+import plotly.graph_objects as go
 
-from callbacks.model_state import model_state
 from callbacks import user_actions
+from callbacks.graph_updates import figure_add_constraint, figure_update_objective
 from components.components import app_layout
+from model.domain_transfer_objects import Constraint, Objective
+from model.linear_program import linear_program
 
+
+def get_max_numeric_name(constraint_list: list[Constraint]) -> int:
+    return max(int(constraint.name) for constraint in constraint_list if constraint.name.isdigit())
+
+
+initial_objective = Objective(sense='max', x_coeff=6.0, y_coeff=9.0)
+initial_constraints = [
+    Constraint(name='0', x_coeff=2.0, y_coeff=3.0, sense='<=', rhs=12.0),
+    Constraint(name='1', x_coeff=1.0, y_coeff=1.0, sense='<=', rhs=5.0),
+    Constraint(name='2', x_coeff=1.0, y_coeff=0.0, sense='>=', rhs=0.0),
+    Constraint(name='3', x_coeff=0.0, y_coeff=1.0, sense='>=', rhs=0.0),
+]
+
+linear_program.load(initial_objective, initial_constraints)
+linear_program.optimize()
+
+# todo: initialize graph/figure
+initial_figure = go.Figure()
+# figure_update_objective(app.layout.children[1].children[0].figure, initial_objective)
+# for constraint in initial_constraints:
+#     figure_add_constraint(app.layout.children[1].children[0].figure, constraint)
+
+app = dash.Dash(__name__)
+app.title = 'LP Visualizer'
+# app._favicon = (os.path.join('assets', 'icon.ico'))
+app.layout = app_layout(
+    initial_objective=initial_objective,
+    initial_constraints=initial_constraints,
+    initial_add_constraint_button_n_clicks=get_max_numeric_name(initial_constraints),
+    initial_figure=initial_figure,
+    initial_optimization_result=str(linear_program.get_optimization_result())
+)
+
+user_actions.register(app)
 
 
 if __name__ == '__main__':
-    print('DEBUG\n\n')
-    print(model_state)
-    model_state._debug()
-    print('\n\n')
-
-    app = dash.Dash(__name__)
-    app.layout = app_layout(model_state)
-    user_actions.register(app)
-
     app.run(debug=True)
 
+
 # todos:
-# - top prio: add optimization result callbacks and graph callbacks
+# - add initial graph
+#   - solve no return value at init problem
 # - nice to have: add functionality for toggling constraints on/off (buttons, callbacks, greying out)
-# - define app_layout without relying on model_state (add containers for elements, populate from model state in app.py)
 # - make it look pretty:
+#   - add custom favicon
 #   - fiddle with css
 #   - add nicer components with Dash Mantine Components (DMC) https://www.dash-mantine-components.com/
 # - fix bugs
@@ -30,9 +61,10 @@ if __name__ == '__main__':
 # known issues:
 # - reload browser page => UI refreshes, but not LP model => stale constraint IDs in UI => errors when changing constraints
 #   - re-create initial model on reload?
+#   - it might be the same problem as with multiple users on the same shared website
+#   - switch to manual lp storage and optimization? only run with one server? reset on reload?
 # - with debug=True, model is optimized twice at startup
-# - if the last constraint is deleted, add constraint button does nothing and throws callback error "cannot read properties of undefined (reading 'map')"
-#   - separate callback for remove buttons?
+#   - randomly got fixed when model initialization was in linear_program.py, then re-added when model initialization got moved to app.py
 
 
 # experimental findings, note for later: if we want to horizontally align bottom edge of 's.t.' label with bottom edge of first constraint row,
@@ -47,6 +79,13 @@ if __name__ == '__main__':
 # then formulas are rendered by writing, for example, '\\(x\\)' or r'\(x\)' instead of dl.DashLatex(r'$x$')
 # however, the mathjax approach is unfortunately unstable---math rendering breaks after a few page reloads
 
+# experimental findings: dash handles inputs weirdly:
+# - input is wrapped in div (toghether with buttons)
+# - class of input inside div is only dash-input-element
+# - stepper buttons are generated inside div even if min/max/step parameters are None
+# - as a result, className is only applied to div wrapper, not input => text-align gets overridden
+# - hence need for input[id*="-coeff"] to apply text-align: right
+# - also input element is wider than div, hence need for width: 100% inside input[id*="-coeff"]
 
 # docs: list of useful links about dash
 # https://dash.plotly.com/pattern-matching-callbacks
@@ -57,3 +96,8 @@ if __name__ == '__main__':
 # https://dash.plotly.com/dash-core-components
 
 # docs: python-mip documentation https://docs.python-mip.com/en/latest/name.dash.html
+
+# documentation:
+# - how to use Patch https://dash.plotly.com/partial-properties
+# - how to work with Graph (also internally) https://dash.plotly.com/dash-core-components/graph
+# - how to add and control shapes https://plotly.com/python/shapes/

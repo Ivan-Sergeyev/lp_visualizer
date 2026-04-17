@@ -1,140 +1,222 @@
 import dash
+import plotly.graph_objects as go
 
-from callbacks.model_state import model_state, ConstraintDict
+from callbacks import graph_updates
+from model.domain_transfer_objects import Constraint
+from model.linear_program import linear_program
 from components.components import constraint_row_component
-
-
-def get_trigger_prop_ids_and_values():
-    return [
-        (dash.callback_context.triggered_prop_ids[trigger['prop_id']], trigger['value'])
-        for trigger in dash.callback_context.triggered
-    ]
 
 
 def register(app):
     @app.callback(
+        dash.Output('graph', 'figure', allow_duplicate=True),
+        dash.Output('optimization-result', 'children', allow_duplicate=True),
         dash.Input('objective-sense', 'value'),
+        dash.State('graph', 'figure'),
         prevent_initial_call=True,
     )
-    def update_objective_sense(selected_sense):
-        print(f' --- In update_objective_sense({selected_sense})')
-        if selected_sense:
-            print(f'Updating model sense with {selected_sense}')
-            return model_state.update_objective_sense(selected_sense)
+    def set_objective_sense(selected_sense: str, figure: go.Figure) -> tuple[dash.Patch, dash.Patch]:
+        print(f' --- in {set_objective_sense.__name__}({selected_sense})')
 
+        if not selected_sense:
+            return dash.Patch(), dash.Patch()
+
+        linear_program.set_objective_sense(selected_sense)
+        linear_program.optimize()
+
+        result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
+        figure_patch = graph_updates.figure_update_objective(figure, linear_program.get_objective())
+        return figure_patch, result_patch
 
     @app.callback(
+        dash.Output('graph', 'figure', allow_duplicate=True),
+        dash.Output('optimization-result', 'children', allow_duplicate=True),
         dash.Input('objective-x-coeff', 'value'),
         dash.Input('objective-y-coeff', 'value'),
+        dash.State('graph', 'figure'),
         prevent_initial_call=True,
     )
-    def update_objective(x_coeff, y_coeff):
-        print(f' --- In update_objective({x_coeff}, {y_coeff})')
-        if x_coeff is not None and y_coeff is not None:
-            return model_state.update_objective(x_coeff, y_coeff)
+    def set_objective_coeffs(x_coeff: float, y_coeff: float, figure: go.Figure) -> tuple[dash.Patch, dash.Patch]:
+        print(f' --- in {set_objective_coeffs.__name__}({x_coeff}, {y_coeff})')
 
+        if x_coeff is None or y_coeff is None:
+            return dash.Patch(), dash.Patch()
+
+        linear_program.set_objective_coeffs(x_coeff, y_coeff)
+        linear_program.optimize()
+
+        result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
+        figure_patch = graph_updates.figure_update_objective(figure, linear_program.get_objective())
+        return figure_patch, result_patch
+
+    def add_constraint(constraint: Constraint, figure: go.Figure) -> tuple[dash.Patch, dash.Patch, dash.Patch]:
+        print(f' --- in {add_constraint.__name__}({constraint})')
+
+        linear_program.add_constraint(constraint)
+        linear_program.optimize()
+
+        result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
+        figure_patch = graph_updates.figure_add_constraint(figure, constraint)
+        constraints_patch = dash.Patch()
+        constraints_patch.insert(-1, constraint_row_component(constraint))
+
+        return constraints_patch, figure_patch, result_patch
+
+    def set_constraint_x_coefficient(constraint_name: str, x_coeff: float, figure: go.Figure) -> tuple[dash.Patch, dash.Patch, dash.Patch]:
+        print(f' --- in {set_constraint_x_coefficient.__name__}({constraint_name}, {x_coeff})')
+
+        linear_program.set_constraint_x_coeff(constraint_name, x_coeff)
+        linear_program.optimize()
+
+        figure_patch = graph_updates.figure_update_constraint(figure, linear_program.get_constraint_by_name(constraint_name))
+        result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
+        constraints_patch = dash.Patch()
+
+        return constraints_patch, figure_patch, result_patch
+
+    def set_constraint_y_coefficient(constraint_name: str, y_coeff: float, figure: go.Figure) -> tuple[dash.Patch, dash.Patch, dash.Patch]:
+        print(f' --- in {set_constraint_y_coefficient.__name__}({constraint_name}, {y_coeff})')
+
+        linear_program.set_constraint_y_coeff(constraint_name, y_coeff)
+        linear_program.optimize()
+
+        figure_patch = graph_updates.figure_update_constraint(figure, linear_program.get_constraint_by_name(constraint_name))
+        result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
+        constraints_patch = dash.Patch()
+
+        return constraints_patch, figure_patch, result_patch
+
+    def set_constraint_sense(constraint_name: str, sense: str) -> tuple[dash.Patch, dash.Patch, dash.Patch]:
+        print(f' --- in {set_constraint_sense.__name__}({constraint_name}, {sense})')
+
+        linear_program.set_constraint_sense(constraint_name, sense)
+        linear_program.optimize()
+
+        result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
+        figure_patch = dash.Patch() # todo: implement feasible region update
+        constraints_patch = dash.Patch()
+
+        return constraints_patch, figure_patch, result_patch
+
+    def set_constraint_rhs(constraint_name: str, rhs: float, figure: go.Figure) -> tuple[dash.Patch, dash.Patch, dash.Patch]:
+        print(f' --- in {set_constraint_rhs.__name__}({constraint_name}, {rhs})')
+
+        linear_program.set_constraint_rhs(constraint_name, rhs)
+        linear_program.optimize()
+
+        figure_patch = graph_updates.figure_update_constraint(figure, linear_program.get_constraint_by_name(constraint_name))
+        result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
+        constraints_patch = dash.Patch()
+
+        return constraints_patch, figure_patch, result_patch
+
+    def remove_constraint(constraint_name: str, constraints_list: list, figure: go.Figure) -> tuple[dash.Patch, dash.Patch, dash.Patch]:
+        print(f' --- in {remove_constraint.__name__}({constraint_name})')
+
+        occurrences = [
+            pos for pos, prop in enumerate(constraints_list)
+            if isinstance(prop['props']['id'], dict)
+               and prop['props']['id'].get('type') == 'constraint-row'
+               and prop['props']['id'].get('name') == constraint_name
+        ]
+
+        if len(occurrences) < 1:
+            raise ValueError(f'Constraint {constraint_name} not found in constraints list')
+
+        if len(occurrences) > 1:
+            raise ValueError(f'Constraint {constraint_name} found in constraints list at more than one index: {occurrences}')
+
+        remaining_constraints = [
+            prop for prop in constraints_list
+            if isinstance(prop['props']['id'], dict)
+                and prop['props']['id'].get('type') == 'constraint-row'
+        ]
+        if len(remaining_constraints) == 1:
+            # reset last constraint instead of removing it to prevent master_constraint_callback() from breaking when no constraints remain
+            default_constraint = Constraint(constraint_name)
+
+            linear_program.remove_constraint(constraint_name)
+            linear_program.add_constraint(default_constraint)
+            linear_program.optimize()
+
+            constraints_patch = dash.Patch()
+            constraints_patch[occurrences[0]] = constraint_row_component(default_constraint)
+            figure_patch = graph_updates.figure_update_constraint(figure, default_constraint)
+            result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
+            return constraints_patch, figure_patch, result_patch
+
+        linear_program.remove_constraint(constraint_name)
+        linear_program.optimize()
+
+        constraints_patch = dash.Patch()
+        del constraints_patch[occurrences[0]]
+        result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
+        figure_patch = dash.Patch() # todo: implement removal
+        return constraints_patch, figure_patch, result_patch
 
     @app.callback(
-        dash.Input({'type': 'constraint-x-coeff', 'name': dash.ALL}, 'value'),
-        prevent_initial_call=True,
-    )
-    def update_constraint_x_coefficient(_x_coeffs):
-        print(f' --- In update_constraint_x_coefficient({_x_coeffs})')
-        for constraint_prop_id, x_coeff in get_trigger_prop_ids_and_values():
-            print(f'Triggered by {constraint_prop_id} with value {x_coeff}')
-            return model_state.update_constraint_x_coeff(constraint_prop_id['name'], float(x_coeff))
+        dash.Output('constraints-list', 'children', allow_duplicate=True),
+        dash.Output('graph', 'figure', allow_duplicate=True),
+        dash.Output('optimization-result', 'children', allow_duplicate=True),
 
-
-    @app.callback(
-        dash.Input({'type': 'constraint-y-coeff', 'name': dash.ALL}, 'value'),
-        prevent_initial_call=True,
-    )
-    def update_constraint_y_coefficient(_y_coeffs):
-        print(f' --- In update_constraint_y_coefficient ({_y_coeffs})')
-        for constraint_prop_id, y_coeff in get_trigger_prop_ids_and_values():
-            print(f'Triggered by {constraint_prop_id} with value {y_coeff}')
-            return model_state.update_constraint_y_coeff(constraint_prop_id['name'], float(y_coeff))
-
-
-    @app.callback(
-        dash.Input({'type': 'constraint-sense', 'name': dash.ALL}, 'value'),
-        prevent_initial_call=True,
-    )
-    def update_constraint_sense(_senses):
-        print(f' --- In update_constraint_sense({_senses})')
-        for constraint_prop_id, sense in get_trigger_prop_ids_and_values():
-            print(f'Triggered by {constraint_prop_id} with value {sense}')
-            return model_state.update_constraint_sense(constraint_prop_id['name'], sense)
-
-
-    @app.callback(
-        dash.Input({'type': 'constraint-rhs', 'name': dash.ALL}, 'value'),
-        prevent_initial_call=True,
-    )
-    def update_constraint_rhs(_rhs_values):
-        print(f' --- In update_constraint_rhs({_rhs_values})')
-        for constraint_prop_id, rhs_value in get_trigger_prop_ids_and_values():
-            print(f'Triggered by {constraint_prop_id} with value {rhs_value}')
-            return model_state.update_constraint_rhs(constraint_prop_id['name'], float(rhs_value))
-
-
-    def _add_constraint(add_n_clicks: int) -> dash.Patch:
-        new_constraint = ConstraintDict(name=str(add_n_clicks))
-
-        model_state.add_constraint(new_constraint)
-        # todo: propagate graph update
-
-        patch = dash.Patch()
-        patch.insert(-1, constraint_row_component(new_constraint))
-        return patch
-
-
-    def _remove_constraint(constraints_container: list, constraint_name: str) -> dash.Patch:
-        patch = dash.Patch()
-        constraint_found = False
-
-        for pos, prop in enumerate(constraints_container[1]['props']['children']):
-            elem_id = prop['props']['id']
-
-            if not isinstance(elem_id, dict):
-                continue
-
-            if elem_id['type'] != 'constraint-row' or elem_id['name'] != constraint_name:
-                continue
-
-            constraint_found = True
-            model_state.remove_constraint(constraint_name)
-            # todo: propagate graph update
-            del patch[pos]
-
-        if not constraint_found:
-            raise ValueError(f'Constraint with name {constraint_name} not found in constraints container list')
-
-        return patch
-
-
-    @app.callback(
-        dash.Output('constraints-list', 'children', True),
         dash.Input('add-constraint-button', 'n_clicks'),
+
+        dash.Input({'type': 'constraint-x-coeff', 'name': dash.ALL}, 'value'),
+        dash.Input({'type': 'constraint-y-coeff', 'name': dash.ALL}, 'value'),
+        dash.Input({'type': 'constraint-sense', 'name': dash.ALL}, 'value'),
+        dash.Input({'type': 'constraint-rhs', 'name': dash.ALL}, 'value'),
         dash.Input({'type': 'remove-constraint-button', 'name': dash.ALL}, 'n_clicks'),
-        dash.State('constraints-wrapper', 'children'),
+
+        dash.State('constraints-list', 'children'),
+        dash.State('graph', 'figure'),
+
         prevent_initial_call=True,
         running=[
             (dash.Output('add-constraint-button', 'disabled'), True, False),
             (dash.Output({'type': 'remove-constraint-button', 'name': dash.ALL}, 'disabled'), True, False),
         ],
     )
-    def add_or_remove_constraint(add_n_clicks: int, _remove_ns_clicks: list[int], constraints_container: list):
-        print(f' --- In add_constraint({add_n_clicks})')
+    def master_constraint_callback(
+        add_n_clicks: int,
 
-        for trigger_prop_id, value in get_trigger_prop_ids_and_values():
-            print(f'trigger_prop_id: {trigger_prop_id}, value: {value}')
+        _x_coeffs: list[float],
+        _y_coeffs: list[float],
+        _senses: list[str],
+        _rhss: list[float],
+        _remove_ns_clicks: tuple[int],
+
+        constraints_list: list,
+        figure: go.Figure,
+    ) -> tuple[dash.Patch, dash.Patch, dash.Patch]:
+        print(f' --- in { tuple.__name__}({add_n_clicks})')
+
+        for trigger in dash.callback_context.triggered:
+            trigger_prop_id = dash.callback_context.triggered_prop_ids.get(trigger.get('prop_id'))
+            trigger_value = trigger.get('value')
+            print(f'trigger_prop_id: {trigger_prop_id}, value: {trigger_value}')
+
+            if trigger_prop_id is None:
+                continue
 
             if trigger_prop_id == 'add-constraint-button':
-                return _add_constraint(add_n_clicks)
+                return add_constraint(Constraint(name=str(add_n_clicks)), figure)
 
-            if trigger_prop_id['type'] == 'remove-constraint-button':
-                if value is None or value == 0:
-                    continue
-                constraint_name = trigger_prop_id['name']
-                return _remove_constraint(constraints_container, constraint_name)
+            trigger_type, trigger_name = trigger_prop_id.get('type'), trigger_prop_id.get('name')
+
+            match trigger_type:
+                case 'remove-constraint-button':
+                    if trigger_value is None or trigger_value == 0:
+                        continue
+                    return remove_constraint(trigger_name, constraints_list, figure)
+                case 'constraint-x-coeff':
+                    return set_constraint_x_coefficient(trigger_name, float(trigger_value), figure)
+                case 'constraint-y-coeff':
+                    return set_constraint_y_coefficient(trigger_name, float(trigger_value), figure)
+                case 'constraint-sense':
+                    return set_constraint_sense(trigger_name, trigger_value)
+                case 'constraint-rhs':
+                    return set_constraint_rhs(trigger_name, float(trigger_value), figure)
+                case _:
+                    raise ValueError(f'Unhandled trigger type {trigger_type} for trigger name {trigger_name} with value {trigger_value}')
+
+        return dash.Patch(), dash.Patch(), dash.Patch()

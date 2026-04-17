@@ -1,18 +1,23 @@
-/* General layout and component styling for LP Visualizer */
-
-#app-wrapper {
+/* ===== GLOBAL STYLES ===== */
+html, body {
     display: flex;
-    flex-direction: row;
-    width: 100%;
+    justify-content: center;
     align-items: center;
 }
 
-/* Container for the entire model (objective function and constraints) */
-#left-panel {
+/* ===== LAYOUT CONTAINERS ===== */
+#app-wrapper {
     display: flex;
+    gap: 50px;
     align-items: center;
-    flex: 1;
-    min-width: 45%;
+    justify-content: center;
+}
+
+#left-panel, #right-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 #model-wrapper {
@@ -21,10 +26,9 @@
     align-items: flex-start;
     gap: 10px;
     flex: 1;
-    min-width: 100%;
 }
 
-/* Container for the objective function row */
+/* ===== OBJECTIVE FUNCTION SECTION ===== */
 #objective-row {
     display: flex;
     align-items: center;
@@ -32,30 +36,19 @@
     height: 35px;
 }
 
-/* Style for the objective function sense dropdown (max/min) */
 #objective-sense {
     width: 80px;
-    text-align: center;
     display: inline-block;
+    text-align: center;
 }
 
-/* Container for the constraints */
+/* ===== CONSTRAINTS SECTION ===== */
 #constraints-wrapper {
     display: flex;
     align-items: center;
     gap: 10px;
 }
 
-/* Style for the 's.t.' label */
-.st-label {
-    width: 80px;
-    flex-shrink: 0;
-    text-align: center;
-    display: inline-block;
-    height: 35px;
-}
-
-/* Container for all constraints */
 #constraints-list {
     display: flex;
     flex-direction: column;
@@ -63,7 +56,6 @@
     gap: 10px;
 }
 
-/* Container for constraint rows */
 .constraint-row {
     display: flex;
     align-items: center;
@@ -71,77 +63,84 @@
     height: 35px;
 }
 
-/* Common style for coefficient inputs */
-.coeff-input {
+/* ===== FORM ELEMENTS ===== */
+.st-label {
     width: 80px;
-    text-align: right !important; /* Bug: doesn't work in Dash. */
+    height: 35px;
+    display: inline-block;
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.coeff-input {
+    width: 50px;
     display: inline-block;
 }
 
-/* Style for variable labels (x, y) */
+input {
+    width: 100%;
+}
+
+input[id*="-coeff"] {
+    text-align: right;
+}
+
 .variable-label {
     width: 10px;
-    text-align: center;
     display: inline-block;
+    text-align: center;
 }
 
-/* Style for the sign between terms (+, -) */
 .sign-label {
     width: 10px;
-    text-align: center;
     display: inline-block;
+    text-align: center;
 }
 
-/* Style for the constraint sense dropdown (<=, >=, =) */
 .constraint-sense {
-    width: 70px;
-    text-align: center;
+    width: 60px;
     display: inline-block;
+    text-align: center;
 }
 
-/* Style for the solution value display */
-#solution-value {
-    margin-top: 20px;
-    font-size: 18px;
-}
-
-/* Style for the "Add Constraint" button */
-.add-constraint-button {
-    background-color: green;
-    border-radius: 8px;
-    border: none;
+/* ===== BUTTONS ===== */
+.button {
+    display: flex;
     align-items: center;
     justify-content: center;
+    height: 35px;
+    border: none;
+    border-radius: 8px;
     color: white;
     cursor: pointer;
     transition: background-color 0.2s;
-    height: 35px;
 }
 
-/* Style for the "Add Constraint" button on hover */
+.add-constraint-button {
+    background-color: green;
+}
+
 .add-constraint-button:hover {
     background-color: darkgreen;
 }
 
-/* Style for the "Remove Constraint" button */
 .remove-constraint-button {
     background-color: red;
-    border-radius: 8px;
-    border: none;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    height: 35px;
 }
 
-/* Style for the "Remove Constraint" button on hover */
 .remove-constraint-button:hover {
     background-color: darkred;
 }
 
-#right-panel {
-    flex: 1;
-    min-width: 50%;
+/* ===== OUTPUT ===== */
+#solution {
+    height: 35px;
+    font-size: 18px;
+}
+
+/* ===== RESPONSIVE LAYOUT ===== */
+@media (max-width: 1350px) {
+    #app-wrapper {
+        flex-direction: column;
+    }
 }
