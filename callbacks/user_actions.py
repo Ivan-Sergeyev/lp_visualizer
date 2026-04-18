@@ -200,7 +200,7 @@ def register(app):
         for trigger in callback_context.triggered:
             trigger_prop_id = callback_context.triggered_prop_ids.get(trigger.get('prop_id'))
             trigger_value = trigger.get('value')
-            logger.debug(f'Calling {trigger_prop_id}, value: {trigger_value}')
+            logger.debug(f'Triggered by {trigger_prop_id} with value {trigger_value}')
 
             if trigger_prop_id is None:
                 continue
@@ -208,22 +208,25 @@ def register(app):
             if trigger_prop_id == COMPONENT_IDS['constraints']['add_button']:
                 return add_constraint(Constraint(name=str(add_n_clicks)), figure)
 
-            trigger_type, trigger_name = trigger_prop_id.get('type'), trigger_prop_id.get('name')
+            trigger_name = trigger_prop_id.get('name', '')
 
-            match trigger_type:
-                case 'remove-constraint-button':
-                    if trigger_value is None or trigger_value == 0:
-                        continue
-                    return remove_constraint(trigger_name, constraints_list, figure)
-                case 'constraint-x-coeff':
-                    return set_constraint_x_coefficient(trigger_name, float(trigger_value), figure)
-                case 'constraint-y-coeff':
-                    return set_constraint_y_coefficient(trigger_name, float(trigger_value), figure)
-                case 'constraint-sense':
-                    return set_constraint_sense(trigger_name, trigger_value, figure)
-                case 'constraint-rhs':
-                    return set_constraint_rhs(trigger_name, float(trigger_value), figure)
-                case _:
-                    raise ValueError(f'Unhandled trigger type {trigger_type} for trigger name {trigger_name} with value {trigger_value}')
+            if trigger_prop_id == COMPONENT_IDS['constraints']['remove_button'](trigger_name):
+                if trigger_value is None or trigger_value == 0:
+                    continue
+                return remove_constraint(trigger_name, constraints_list, figure)
+
+            if trigger_prop_id == COMPONENT_IDS['constraints']['x_coeff'](trigger_name):
+                return set_constraint_x_coefficient(trigger_name, float(trigger_value), figure)
+
+            if trigger_prop_id == COMPONENT_IDS['constraints']['y_coeff'](trigger_name):
+                return set_constraint_y_coefficient(trigger_name, float(trigger_value), figure)
+
+            if trigger_prop_id == COMPONENT_IDS['constraints']['sense'](trigger_name):
+                return set_constraint_sense(trigger_name, trigger_value, figure)
+
+            if trigger_prop_id == COMPONENT_IDS['constraints']['rhs'](trigger_name):
+                return set_constraint_rhs(trigger_name, float(trigger_value), figure)
+
+            raise ValueError(f'Unhandled trigger {trigger_prop_id} with value {trigger_value}')
 
         return Patch(), Patch(), Patch()
