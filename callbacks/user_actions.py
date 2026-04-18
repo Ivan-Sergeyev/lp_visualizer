@@ -93,7 +93,7 @@ def register(app):
         linear_program.optimize()
 
         result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
-        figure_patch = dash.Patch() # todo: implement feasible region update
+        figure_patch = dash.Patch()
         constraints_patch = dash.Patch()
 
         return constraints_patch, figure_patch, result_patch
@@ -151,7 +151,7 @@ def register(app):
         constraints_patch = dash.Patch()
         del constraints_patch[occurrences[0]]
         result_patch = graph_updates.optimization_result_update(linear_program.get_optimization_result())
-        figure_patch = dash.Patch() # todo: implement removal
+        figure_patch = graph_updates.figure_remove_constraint(figure, constraint_name)
         return constraints_patch, figure_patch, result_patch
 
     @app.callback(

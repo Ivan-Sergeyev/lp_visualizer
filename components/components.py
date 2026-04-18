@@ -160,7 +160,7 @@ def app_layout(
                                                 title='Add constraint',
                                                 children=[
                                                     'Add constraint',
-                                                    # dash_iconify.DashIconify(icon='mdi:plus')
+                                                    # todo: plus icon dash_iconify.DashIconify(icon='mdi:plus')
                                                 ],
                                                 n_clicks=initial_add_constraint_button_n_clicks,
                                             ),

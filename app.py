@@ -1,9 +1,9 @@
 import dash
-import os
+# import os
 import plotly.graph_objects as go
 
 from callbacks import user_actions
-from callbacks.graph_updates import figure_add_constraint, figure_update_objective
+from callbacks.graph_updates import figure_init_constraint, figure_init_objective
 from components.components import app_layout
 from model.domain_transfer_objects import Constraint, Objective
 from model.linear_program import linear_program
@@ -13,22 +13,21 @@ def get_max_numeric_name(constraint_list: list[Constraint]) -> int:
     return max(int(constraint.name) for constraint in constraint_list if constraint.name.isdigit())
 
 
-initial_objective = Objective(sense='max', x_coeff=6.0, y_coeff=9.0)
+initial_objective = Objective(sense='max', x_coeff=6., y_coeff=9.)
 initial_constraints = [
-    Constraint(name='0', x_coeff=2.0, y_coeff=3.0, sense='<=', rhs=12.0),
-    Constraint(name='1', x_coeff=1.0, y_coeff=1.0, sense='<=', rhs=5.0),
-    Constraint(name='2', x_coeff=1.0, y_coeff=0.0, sense='>=', rhs=0.0),
-    Constraint(name='3', x_coeff=0.0, y_coeff=1.0, sense='>=', rhs=0.0),
+    Constraint(name='0', x_coeff=2., y_coeff=3., sense='<=', rhs=12.),
+    Constraint(name='1', x_coeff=1., y_coeff=1., sense='<=', rhs=5.),
+    Constraint(name='2', x_coeff=1., y_coeff=0., sense='>=', rhs=0.),
+    Constraint(name='3', x_coeff=0., y_coeff=1., sense='>=', rhs=0.),
 ]
 
 linear_program.load(initial_objective, initial_constraints)
 linear_program.optimize()
 
-# todo: initialize graph/figure
-initial_figure = go.Figure()
-# figure_update_objective(app.layout.children[1].children[0].figure, initial_objective)
-# for constraint in initial_constraints:
-#     figure_add_constraint(app.layout.children[1].children[0].figure, constraint)
+initial_figure = go.Figure(layout=dict(
+    xaxis=dict(range=(-1, 6)),
+    yaxis=dict(range=(-1, 4)),
+))
 
 app = dash.Dash(__name__)
 app.title = 'LP Visualizer'
@@ -41,6 +40,10 @@ app.layout = app_layout(
     initial_optimization_result=str(linear_program.get_optimization_result())
 )
 
+figure_init_objective(initial_figure, initial_objective)
+for constraint in initial_constraints:
+    figure_init_constraint(initial_figure, constraint)
+
 user_actions.register(app)
 
 
@@ -49,22 +52,33 @@ if __name__ == '__main__':
 
 
 # todos:
-# - add initial graph
-#   - solve no return value at init problem
 # - nice to have: add functionality for toggling constraints on/off (buttons, callbacks, greying out)
 # - make it look pretty:
 #   - add custom favicon
 #   - fiddle with css
 #   - add nicer components with Dash Mantine Components (DMC) https://www.dash-mantine-components.com/
-# - fix bugs
-
-# known issues:
-# - reload browser page => UI refreshes, but not LP model => stale constraint IDs in UI => errors when changing constraints
-#   - re-create initial model on reload?
-#   - it might be the same problem as with multiple users on the same shared website
-#   - switch to manual lp storage and optimization? only run with one server? reset on reload?
-# - with debug=True, model is optimized twice at startup
-#   - randomly got fixed when model initialization was in linear_program.py, then re-added when model initialization got moved to app.py
+#   - add color picker for objective arrow, constraints lines colors, solution, feasible region etc.?
+#   - add feasible region
+#     - implement computation of convex hull (of constraints + bounding box) to get vertices_x_list, vertices_y_list
+#     - add feasible region rendering on graph via go.Scatter(x=vertices_x_list, y=vertices_y_list, fill="toself")
+#   - render objective vector in a box in a fixed position on the plot
+#     - change '*ref' values to 'paper' for positioning relative to plot; same for bounding box if you want it
+#     - add box rendering around objective
+#   - implement toggling constraints on/off
+#     - track in model
+#     - pass dash='dash' to constraint dict renger for disabled constraints
+#   - implement saving and loading of models
+#   - implement resetting lp to default
+#   - move documentation from app.py to readme
+#   - generate readme/spec/... for github
+#   - implement tests
+# - fix known issues:
+#   - reload browser page => UI refreshes, but not LP model => stale constraint IDs in UI => errors when changing constraints
+#     - re-create initial model on reload?
+#     - it might be the same problem as with multiple users on the same shared website
+#     - switch to manual lp storage and optimization? only run with one server? reset on reload?
+#   - with debug=True, model is optimized twice at startup
+#     - randomly got fixed when model initialization was in linear_program.py, then re-added when model initialization got moved to app.py
 
 
 # experimental findings, note for later: if we want to horizontally align bottom edge of 's.t.' label with bottom edge of first constraint row,
@@ -97,7 +111,7 @@ if __name__ == '__main__':
 
 # docs: python-mip documentation https://docs.python-mip.com/en/latest/name.dash.html
 
-# documentation:
+# docs:
 # - how to use Patch https://dash.plotly.com/partial-properties
 # - how to work with Graph (also internally) https://dash.plotly.com/dash-core-components/graph
 # - how to add and control shapes https://plotly.com/python/shapes/
