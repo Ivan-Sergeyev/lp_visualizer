@@ -7,26 +7,26 @@ An interactive web application for visualizing and solving **2-variable linear p
 ## Features
 
 - **Live LP editor**:
-  - [v] enter objective function coefficients
-  - [v] add/remove constraints through a structured form
-  - [v] the plot updates on every change
+  - [x] enter objective function coefficients
+  - [x] add/remove constraints through a structured form
+  - [x] the plot updates on every change
 - **Feasible region**:
   - [ ] shaded semi-transparent polygon
   - [ ] with bold boundary segments
   - [ ] and vertex markers
 - **Constraint lines**:
-  - [v] infinite lines
+  - [x] infinite lines
   - [ ] that rescale automatically as you zoom or pan
 - **Objective vector**:
-  - [v] fixed-size arrow
+  - [x] fixed-size arrow
   - [ ] in a corner box showing the optimization direction
 - **Optimal solution**:
-  - [v] displays the optimal value below the plot
+  - [x] displays the optimal value below the plot
   - [ ] red marker placed at the optimal vertex
 - **Unbounded / infeasible detection**:
-  - [v] the app reports these statuses as text when no finite optimum exists
+  - [x] the app reports these statuses as text when no finite optimum exists
 - **Per-constraint controls**:
-  - [v] **Delete** (trash icon): permanently remove a constraint and update the plot
+  - [x] **Delete** (trash icon): permanently remove a constraint and update the plot
   - [ ] **Toggle** (eye icon): disable a constraint without deleting it; disabled constraints are dashed on the plot and excluded from solving
 - **Adaptive sign display**:
   - [ ] automatically shows `−` instead of `+ −` when a coefficient is negative
