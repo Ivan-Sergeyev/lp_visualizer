@@ -3,55 +3,69 @@ import math
 from model.domain_transfer_objects import Constraint, Objective
 
 
+type Range2D = tuple[float, float]
+type Point2D = tuple[float, float]
+
 EPSILON: float = 1e-5
 
-def normal_objective_vector(objective: Objective) -> tuple[float, float]:
-    len = math.sqrt(objective.x_coeff ** 2 + objective.y_coeff ** 2)
 
-    if len < EPSILON:
+def float_in_range(a: float, range: Point2D) -> bool:
+    return range[0] - EPSILON < a < range[1] + EPSILON
+
+
+def float_eq(a: float, b: float) -> bool:
+    return a - EPSILON < b < a + EPSILON
+
+
+def point_eq(a: Point2D, b: Point2D) -> bool:
+    return float_eq(a[0], b[0]) and float_eq(a[1], b[1])
+
+
+def normal_objective_vector(objective: Objective) -> Point2D:
+    length = math.sqrt(objective.x_coeff ** 2 + objective.y_coeff ** 2)
+
+    if float_eq(length, 0.):
         return (0., 0.)
 
-    x, y = objective.x_coeff / len, objective.y_coeff / len
+    x, y = objective.x_coeff / length, objective.y_coeff / length
     return (x, y) if Objective.sense_to_ui(objective.sense) == 'max' else (-x, -y)
 
 
-def point_is_in_bounding_box(x: float, y: float, x_min: float, x_max: float, y_min: float, y_max: float) -> bool:
-    return x_min - EPSILON < x < x_max + EPSILON and y_min - EPSILON < y < y_max + EPSILON
+def point_is_in_bounding_box(point: Point2D, x_range: Range2D, y_range: Range2D) -> bool:
+    return float_in_range(point[0], x_range) and float_in_range(point[1], y_range)
 
 
-def line_point_with_x(constraint: Constraint, x: float) -> tuple[float, float]:
-    return (x, (constraint.rhs - constraint.x_coeff * x) / constraint.y_coeff)
+def line_point_with_x(constraint: Constraint, x: float) -> Point2D:
+    return x, (constraint.rhs - constraint.x_coeff * x) / constraint.y_coeff
 
 
-def line_point_with_y(constraint: Constraint, y: float) -> tuple[float, float]:
-    return ((constraint.rhs - constraint.y_coeff * y) / constraint.x_coeff, y)
+def line_point_with_y(constraint: Constraint, y: float) -> Point2D:
+    return (constraint.rhs - constraint.y_coeff * y) / constraint.x_coeff, y
 
 
-def get_constraint_line_endpoints(constraint: Constraint, x_min: float, x_max: float, y_min: float, y_max: float) -> tuple[tuple[float, float], tuple[float, float]]:
-    if constraint.x_coeff == 0 and constraint.y_coeff == 0:
-        # degenerate line
-        return ((x_min, y_min), (x_min, y_min))
+def unique_float_tuples(points: list[Point2D]) -> list[Point2D]:
+    return list(set(points))
 
-    if constraint.x_coeff == 0:
-        # horizontal line
-        y_val = constraint.rhs / constraint.y_coeff
-        return ((x_min, y_val), (x_max, y_val))
 
-    if constraint.y_coeff == 0:
-        # vertical line
-        x_val = constraint.rhs / constraint.x_coeff
-        return ((x_val, y_min), (x_val, y_max))
+def intersect_line_box(constraint: Constraint, x_range: Range2D, y_range: Range2D) -> list[Point2D]:
+    intersections = []
 
-    intersections = list(set([
-        line_point_with_x(constraint, x_min),
-        line_point_with_x(constraint, x_max),
-        line_point_with_y(constraint, y_min),
-        line_point_with_y(constraint, y_max),
-    ]))
-    ret = [(x, y) for x, y in intersections if point_is_in_bounding_box(x, y, x_min, x_max, y_min, y_max)]
+    if not -EPSILON < constraint.x_coeff < EPSILON:
+        intersections += [line_point_with_y(constraint, y) for y in y_range]
 
-    if len(ret) < 2:
-        # line outside of bounding box
-        return (intersections[0], intersections[1])
+    if not -EPSILON < constraint.y_coeff < EPSILON:
+        intersections += [line_point_with_x(constraint, x) for x in x_range]
 
-    return (ret[0], ret[1])
+    intersections = [point for point in intersections if point_is_in_bounding_box(point, x_range, y_range)]
+    return unique_float_tuples(intersections)
+
+
+def get_constraint_line_endpoints(constraint: Constraint, x_range: Range2D, y_range: Range2D) -> tuple[Point2D, Point2D]:
+    intersections = intersect_line_box(constraint, x_range, y_range)
+    match len(intersections):
+        case 0:
+            return (x_range[0], y_range[0]), (x_range[0], y_range[0])
+        case 1:
+            return intersections[0], intersections[0]
+        case _:
+            return intersections[0], intersections[1]

@@ -1,9 +1,41 @@
+from collections.abc import Callable
+
 import dash
 import dash_iconify
 import dash_latex as dl
 import plotly.graph_objects as go
 
-from model.domain_transfer_objects import Constraint, Objective
+from model.domain_transfer_objects import Constraint, Objective, OptimizationResult
+
+
+def type_name_id(type_str: str) -> Callable[[str], dict[str, str]]:
+    return lambda name : {'type': type_str, 'name': name}
+
+
+COMPONENT_IDS = {
+    'objective': {
+        'sense': 'objective-sense',
+        'x_coeff': 'objective-x-coeff',
+        'sign_label': 'objective-sign-label',
+        'y_coeff': 'objective-y-coeff',
+    },
+    'constraints': {
+        'list': 'constraints-list',
+        'add_button': 'add-constraint-button',
+        'row': type_name_id('constraint-row'),
+        'x_coeff': type_name_id('constraint-x-coeff'),
+        'sign_label': type_name_id('constraint-sign-label'),
+        'y_coeff': type_name_id('constraint-y-coeff'),
+        'sense': type_name_id('constraint-sense'),
+        'rhs': type_name_id('constraint-rhs'),
+        'remove_button': type_name_id('remove-constraint-button'),
+    },
+    'graph': 'graph',
+    'optimization_result': 'optimization-result',
+}
+
+CONSTRAINT_SENSES = ['≤', '≥', '=']
+OBJECTIVE_SENSES = ['max', 'min']
 
 
 def objective_row_component(objective: Objective) -> dash.html.Div:
@@ -11,15 +43,15 @@ def objective_row_component(objective: Objective) -> dash.html.Div:
         id='objective-row',
         children=[
             dash.dcc.Dropdown(
-                id='objective-sense',
-                options=['max', 'min'],
+                id=COMPONENT_IDS['objective']['sense'],
+                options=OBJECTIVE_SENSES,
                 value=objective.sense,
                 clearable=False,
                 searchable=False,
                 placeholder='Objective sense',
             ),
             dash.dcc.Input(
-                id='objective-x-coeff',
+                id=COMPONENT_IDS['objective']['x_coeff'],
                 className='coeff-input',
                 type='number',
                 inputMode='numeric',
@@ -33,11 +65,11 @@ def objective_row_component(objective: Objective) -> dash.html.Div:
             ),
             dash.html.Div(
                 dl.DashLatex(r'$+$'),
-                id='objective-sign-label',
+                id=COMPONENT_IDS['objective']['sign_label'],
                 className='sign-label',
             ),
             dash.dcc.Input(
-                id='objective-y-coeff',
+                id=COMPONENT_IDS['objective']['y_coeff'],
                 className='coeff-input',
                 type='number',
                 inputMode='numeric',
@@ -55,11 +87,11 @@ def objective_row_component(objective: Objective) -> dash.html.Div:
 
 def constraint_row_component(constraint: Constraint) -> dash.html.Div:
     return dash.html.Div(
-        id={'type': 'constraint-row', 'name': constraint.name},
+        id=COMPONENT_IDS['constraints']['row'](constraint.name),
         className='constraint-row',
         children=[
             dash.dcc.Input(
-                id={'type': 'constraint-x-coeff', 'name': constraint.name},
+                id=COMPONENT_IDS['constraints']['x_coeff'](constraint.name),
                 className='coeff-input',
                 type='number',
                 inputMode='numeric',
@@ -73,11 +105,11 @@ def constraint_row_component(constraint: Constraint) -> dash.html.Div:
             ),
             dash.html.Div(
                 dl.DashLatex(r'$+$'),
-                id={'type': 'constraint-sign-label', 'name': constraint.name},
+                id=COMPONENT_IDS['constraints']['sign_label'](constraint.name),
                 className='sign-label',
             ),
             dash.dcc.Input(
-                id={'type': 'constraint-y-coeff', 'name': constraint.name},
+                id=COMPONENT_IDS['constraints']['y_coeff'](constraint.name),
                 className='coeff-input',
                 type='number',
                 inputMode='numeric',
@@ -90,20 +122,16 @@ def constraint_row_component(constraint: Constraint) -> dash.html.Div:
                 className='variable-label',
             ),
             dash.dcc.Dropdown(
-                id={'type': 'constraint-sense', 'name': constraint.name},
+                id=COMPONENT_IDS['constraints']['sense'](constraint.name),
                 className='constraint-sense',
-                options=[
-                    '≤',
-                    '≥',
-                    '=',
-                ],
+                options=CONSTRAINT_SENSES,
                 value=constraint.sense,
                 clearable=False,
                 searchable=False,
                 placeholder='Constraint sense',
             ),
             dash.dcc.Input(
-                id={'type': 'constraint-rhs', 'name': constraint.name},
+                id=COMPONENT_IDS['constraints']['rhs'](constraint.name),
                 className='coeff-input',
                 type='number',
                 inputMode='numeric',
@@ -112,7 +140,7 @@ def constraint_row_component(constraint: Constraint) -> dash.html.Div:
                 placeholder='Right hand side',
             ),
             dash.dcc.Button(
-                id={'type': 'remove-constraint-button', 'name': constraint.name},
+                id=COMPONENT_IDS['constraints']['remove_button'](constraint.name),
                 name=constraint.name,
                 className='button remove-constraint-button',
                 title='Remove constraint',
@@ -126,11 +154,11 @@ def constraint_row_component(constraint: Constraint) -> dash.html.Div:
 
 
 def app_layout(
-    initial_objective: Objective,
-    initial_constraints: list[Constraint],
-    initial_add_constraint_button_n_clicks: int,
-    initial_figure: go.Figure,
-    initial_optimization_result: str,
+    objective: Objective,
+    constraints: list[Constraint],
+    add_constraint_button_n_clicks: int,
+    figure: go.Figure,
+    optimization_result: OptimizationResult,
 ) -> dash.html.Div:
     return dash.html.Div(
         id='app-wrapper',
@@ -141,28 +169,28 @@ def app_layout(
                     dash.html.Div(
                         id='model-wrapper',
                         children = [
-                            objective_row_component(initial_objective),
+                            objective_row_component(objective),
                             dash.html.Div(
                                 id='constraints-wrapper',
                                 children=[
                                     dash.html.Div(
                                         's.t.',
-                                        className='st-label',
+                                        id='st-label',
                                     ),
                                     dash.html.Div(
-                                        id='constraints-list',
+                                        id=COMPONENT_IDS['constraints']['list'],
                                         children=[
-                                            constraint_row_component(constraint) for constraint in initial_constraints
+                                            constraint_row_component(constraint) for constraint in constraints
                                         ] + [
                                             dash.html.Button(
-                                                id='add-constraint-button',
+                                                id=COMPONENT_IDS['constraints']['add_button'],
                                                 className='button add-constraint-button',
                                                 title='Add constraint',
                                                 children=[
                                                     'Add constraint',
                                                     # todo: plus icon dash_iconify.DashIconify(icon='mdi:plus')
                                                 ],
-                                                n_clicks=initial_add_constraint_button_n_clicks,
+                                                n_clicks=add_constraint_button_n_clicks,
                                             ),
                                         ],
                                     ),
@@ -176,12 +204,12 @@ def app_layout(
                 id='right-panel',
                 children=[
                     dash.dcc.Graph(
-                        id='graph',
-                        figure=initial_figure,
+                        id=COMPONENT_IDS['graph'],
+                        figure=figure,
                     ),
                     dash.html.Div(
-                        id='optimization-result',
-                        children=[initial_optimization_result],
+                        id=COMPONENT_IDS['optimization_result'],
+                        children=[str(optimization_result)],
                     )
                 ],
             ),

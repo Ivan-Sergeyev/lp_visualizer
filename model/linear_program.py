@@ -1,38 +1,29 @@
 import dataclasses
 import mip
-import traceback
 
 from model.domain_transfer_objects import Constraint, Objective, OptimizationResult
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(init=False)
 class LinearProgram:
     model: mip.Model
-
-    def __init__(self) -> None:
-        pass
+    x: mip.Var
+    y: mip.Var
 
     def load(self, objective: Objective, constraints: list[Constraint]) -> None:
         self.model = mip.Model(sense=mip.MAXIMIZE, solver_name=mip.CBC)
-
         self.x = self.model.add_var(name='x', lb=-mip.INF, ub=mip.INF, var_type=mip.CONTINUOUS)
         self.y = self.model.add_var(name='y', lb=-mip.INF, ub=mip.INF, var_type=mip.CONTINUOUS)
-
         self.set_objective_sense(objective.sense)
         self.set_objective_coeffs(objective.x_coeff, objective.y_coeff)
-
         for constraint in constraints:
             self.add_constraint(constraint)
 
-    def _debug(self, print_traceback=False) -> None:
-        print(' --- in _debug()')
-        if print_traceback:
-            for line in traceback.format_stack():
-                print(line.strip())
-        print(self.model.sense, self.model.objective)
-        for constraint in self.model.constrs:
-            print(constraint)
-        print(' --- end _debug()')
+    def __str__(self) -> str:
+        return '\n'.join(
+            [f'{self.model.sense} {self.model.objective}'] +
+            [f'{constraint}' for constraint in self.model.constrs]
+        )
 
     def _get_mip_constraint_by_name(self, name: str) -> mip.Constr:
         constraint = self.model.constr_by_name(name)
@@ -46,28 +37,24 @@ class LinearProgram:
         self.model.remove(constraint)
 
     def _set_mip_constraint_x_coeff(self, constraint: mip.Constr, x_coeff: float) -> None:
-        # note: constraint coeffs cannot be updated in-place in mip, so remove and re-add constraint with new coeffs
         updated_constraint = Constraint.from_mip(constraint, self.x, self.y)
         updated_constraint.x_coeff = x_coeff
         self._remove_mip_constraint(constraint)
         self.add_constraint(updated_constraint)
 
     def _set_mip_constraint_y_coeff(self, constraint: mip.Constr, y_coeff: float) -> None:
-        # note: constraint coeffs cannot be updated in-place in mip, so remove and re-add constraint with new coeffs
         updated_constraint = Constraint.from_mip(constraint, self.x, self.y)
         updated_constraint.y_coeff = y_coeff
         self._remove_mip_constraint(constraint)
         self.add_constraint(updated_constraint)
 
     def _set_mip_constraint_sense(self, constraint: mip.Constr, sense: str) -> None:
-        # note: constraint sense cannot be updated in-place in mip, so remove and re-add constraint with new sense
         updated_constraint = Constraint.from_mip(constraint, self.x, self.y)
         updated_constraint.sense = sense
         self._remove_mip_constraint(constraint)
         self.add_constraint(updated_constraint)
 
     def _set_mip_constraint_rhs(self, constraint: mip.Constr, rhs: float) -> None:
-        # note: constraint right hand side can be updated in-place in mip
         constraint.rhs = rhs
 
     def set_objective_sense(self, sense: str) -> None:
@@ -97,22 +84,30 @@ class LinearProgram:
     def optimize(self) -> None:
         self.model.optimize()
 
-    def get_objective(self) -> Objective:
+    def objective(self) -> Objective:
         return Objective.from_mip(objective=self.model.objective, sense=self.model.sense, x=self.x, y=self.y)
 
-    def get_constraint_by_name(self, name: str) -> Constraint:
+    def constraint(self, name: str) -> Constraint:
         return Constraint.from_mip(constraint=self._get_mip_constraint_by_name(name), x=self.x, y=self.y)
 
-    def get_constraints(self) -> list[Constraint]:
+    def constraints(self) -> list[Constraint]:
         return [Constraint.from_mip(constraint=constraint, x=self.x, y=self.y) for constraint in self.model.constrs]
 
-    def get_optimization_result(self) -> OptimizationResult:
-        status = OptimizationResult.status_to_ui(self.model.status)
+    def optimization_result(self, optimize: bool = True) -> OptimizationResult:
+        if optimize:
+            self.optimize()
+        return OptimizationResult.from_mip(self.model.status, self.model.objective_value, self.x, self.y)
 
-        if self.model.status != mip.OptimizationStatus.OPTIMAL:
-            return OptimizationResult(status=status, solution_value=None, solution_x=None, solution_y=None)
 
-        return OptimizationResult(status=status, solution_value=self.model.objective_value, solution_x=self.x.x, solution_y=self.y.x)
+initial_objective = Objective(sense='max', x_coeff=6., y_coeff=9.)
 
+initial_constraints = [
+    Constraint(name='0', x_coeff=2., y_coeff=3., sense='<=', rhs=12.),
+    Constraint(name='1', x_coeff=1., y_coeff=1., sense='<=', rhs=5.),
+    Constraint(name='2', x_coeff=1., y_coeff=0., sense='>=', rhs=0.),
+    Constraint(name='3', x_coeff=0., y_coeff=1., sense='>=', rhs=0.),
+]
 
 linear_program = LinearProgram()
+linear_program.load(initial_objective, initial_constraints)
+linear_program.optimize()

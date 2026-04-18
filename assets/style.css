@@ -64,7 +64,7 @@ html, body {
 }
 
 /* ===== FORM ELEMENTS ===== */
-.st-label {
+#st-label {
     width: 80px;
     height: 35px;
     display: inline-block;

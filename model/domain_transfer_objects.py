@@ -9,14 +9,6 @@ class Objective:
     x_coeff: float
     y_coeff: float
 
-    @classmethod
-    def from_mip(cls, objective: mip.LinExpr, sense: str, x: mip.Var, y: mip.Var) -> Objective:
-        return cls(
-            sense=Objective.sense_to_ui(sense),
-            x_coeff=objective.expr.get(x, 0.),
-            y_coeff=objective.expr.get(y, 0.),
-        )
-
     @staticmethod
     def sense_to_mip(sense: str) -> str:
         match sense:
@@ -36,6 +28,14 @@ class Objective:
                 return 'min'
             case _:
                 raise ValueError(f'Unrecognized objective sense {sense}.')
+
+    @classmethod
+    def from_mip(cls, objective: mip.LinExpr, sense: str, x: mip.Var, y: mip.Var) -> Objective:
+        return cls(
+            sense=Objective.sense_to_ui(sense),
+            x_coeff=objective.expr.get(x, 0.),
+            y_coeff=objective.expr.get(y, 0.),
+        )
 
 
 @dataclass
@@ -70,13 +70,6 @@ class Constraint:
             case _:
                 raise ValueError(f'Unrecognized constraint sense {sense}.')
 
-    def __init__(self, name: str, x_coeff: float = 0., y_coeff: float = 0, sense: str = '<=', rhs: float = 0.):
-        self.name = name
-        self.x_coeff = x_coeff
-        self.y_coeff = y_coeff
-        self.sense = Constraint.sense_to_ui(sense)
-        self.rhs = rhs
-
     @classmethod
     def from_mip(cls, constraint: mip.Constr, x: mip.Var, y: mip.Var) -> Constraint:
         return cls(
@@ -86,6 +79,13 @@ class Constraint:
             sense=Constraint.sense_to_ui(constraint.expr.sense),
             rhs=constraint.rhs,
         )
+
+    def __init__(self, name: str, x_coeff: float = 0., y_coeff: float = 0., sense: str = '<=', rhs: float = 0.):
+        self.name = name
+        self.x_coeff = x_coeff
+        self.y_coeff = y_coeff
+        self.sense = Constraint.sense_to_ui(sense)
+        self.rhs = rhs
 
     def to_lin_expr(self, x: mip.Var, y: mip.Var) -> mip.LinExpr:
         return mip.LinExpr(
@@ -98,7 +98,7 @@ class Constraint:
 
 @dataclass
 class OptimizationResult:
-    status: 'str'
+    status: str
     solution_value: float | None
     solution_x: float | None
     solution_y: float | None
@@ -126,6 +126,13 @@ class OptimizationResult:
                 return 'infeasible'
             case _:
                 raise ValueError(f'Unrecognized optimization status {status}.')
+
+    @classmethod
+    def from_mip(cls, status: mip.OptimizationStatus, objective_value: float | None, x: mip.Var, y: mip.Var) -> OptimizationResult:
+        if status != mip.OptimizationStatus.OPTIMAL:
+            return cls(status=OptimizationResult.status_to_ui(status), solution_value=None, solution_x=None, solution_y=None)
+
+        return cls(status=OptimizationResult.status_to_ui(status), solution_value=objective_value, solution_x=x.x, solution_y=y.x)
 
     def __str__(self) -> str:
         match self.status:
