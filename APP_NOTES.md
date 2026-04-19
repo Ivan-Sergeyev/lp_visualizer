@@ -77,5 +77,6 @@
 
 ## Resources
 
+- [Plotly docs](https://docs.plotly.com/)
 - [Dash documentation](https://dash.plotly.com/)
 - [Python-MIP documentation](https://docs.python-mip.com/en/latest/name.dash.html)
