@@ -28,7 +28,7 @@ def normal_objective_vector(objective: Objective) -> Point2D:
         return (0., 0.)
 
     x, y = objective.x_coeff / length, objective.y_coeff / length
-    return (x, y) if Objective.sense_to_ui(objective.sense) == 'max' else (-x, -y)
+    return (x, y) if str(objective.sense) == 'max' else (-x, -y)
 
 
 def point_is_in_bounding_box(point: Point2D, x_range: Range2D, y_range: Range2D) -> bool:

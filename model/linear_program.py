@@ -1,7 +1,7 @@
 import dataclasses
 import mip
 
-from model.domain_transfer_objects import Constraint, Objective, OptimizationResult
+from model.domain_transfer_objects import Constraint, ConstraintSense, Objective, ObjectiveSense, OptimizationResult
 
 
 @dataclasses.dataclass(init=False)
@@ -50,7 +50,7 @@ class LinearProgram:
 
     def _set_mip_constraint_sense(self, constraint: mip.Constr, sense: str) -> None:
         updated_constraint = Constraint.from_mip(constraint, self.x, self.y)
-        updated_constraint.sense = sense
+        updated_constraint.sense = ConstraintSense.from_str(sense)
         self._remove_mip_constraint(constraint)
         self.add_constraint(updated_constraint)
 
@@ -58,13 +58,13 @@ class LinearProgram:
         constraint.rhs = rhs
 
     def set_objective_sense(self, sense: str) -> None:
-        self.model.sense = Objective.sense_to_mip(sense)
+        self.model.sense = ObjectiveSense.to_mip(sense)
 
     def set_objective_coeffs(self, x_coeff: float, y_coeff: float) -> None:
         self.model.objective = mip.LinExpr(variables=[self.x, self.y], coeffs=[x_coeff, y_coeff])
 
     def add_constraint(self, constraint: Constraint) -> None:
-        self.model.add_constr(constraint.to_lin_expr(self.x, self.y), name=constraint.name)
+        self.model.add_constr(constraint.lin_expr(self.x, self.y), name=constraint.name)
 
     def set_constraint_x_coeff(self, name: str, x_coeff: float) -> None:
         self._set_mip_constraint_x_coeff(self._get_mip_constraint_by_name(name), x_coeff)
@@ -99,13 +99,13 @@ class LinearProgram:
         return OptimizationResult.from_mip(self.model.status, self.model.objective_value, self.x, self.y)
 
 
-initial_objective = Objective(sense='max', x_coeff=6., y_coeff=9.)
+initial_objective = Objective(sense=ObjectiveSense.MAX, x_coeff=6., y_coeff=9.)
 
 initial_constraints = [
-    Constraint(name='0', x_coeff=2., y_coeff=3., sense='<=', rhs=12.),
-    Constraint(name='1', x_coeff=1., y_coeff=1., sense='<=', rhs=5.),
-    Constraint(name='2', x_coeff=1., y_coeff=0., sense='>=', rhs=0.),
-    Constraint(name='3', x_coeff=0., y_coeff=1., sense='>=', rhs=0.),
+    Constraint(name='0', x_coeff=2., y_coeff=3., sense=ConstraintSense.LEQ, rhs=12.),
+    Constraint(name='1', x_coeff=1., y_coeff=1., sense=ConstraintSense.LEQ, rhs=5.),
+    Constraint(name='2', x_coeff=1., y_coeff=0., sense=ConstraintSense.GEQ, rhs=0.),
+    Constraint(name='3', x_coeff=0., y_coeff=1., sense=ConstraintSense.GEQ, rhs=0.),
 ]
 
 linear_program = LinearProgram()

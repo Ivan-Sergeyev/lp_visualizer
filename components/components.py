@@ -5,7 +5,7 @@ import dash_iconify
 import dash_latex as dl
 import plotly.graph_objects as go
 
-from model.domain_transfer_objects import Constraint, Objective, OptimizationResult
+from model.domain_transfer_objects import Constraint, ConstraintSense, Objective, ObjectiveSense, OptimizationResult
 
 
 def type_name_id(type_str: str) -> Callable[[str], dict[str, str]]:
@@ -34,8 +34,8 @@ COMPONENT_IDS = {
     'optimization_result': 'optimization-result',
 }
 
-CONSTRAINT_SENSES = ['≤', '≥', '=']
-OBJECTIVE_SENSES = ['max', 'min']
+CONSTRAINT_SENSES = [str(ConstraintSense.LEQ), str(ConstraintSense.GEQ), str(ConstraintSense.EQ)]
+OBJECTIVE_SENSES = [str(ObjectiveSense.MAX), str(ObjectiveSense.MIN)]
 
 
 def objective_row_component(objective: Objective) -> dash.html.Div:
@@ -45,7 +45,7 @@ def objective_row_component(objective: Objective) -> dash.html.Div:
             dash.dcc.Dropdown(
                 id=COMPONENT_IDS['objective']['sense'],
                 options=OBJECTIVE_SENSES,
-                value=objective.sense,
+                value=str(objective.sense),
                 clearable=False,
                 searchable=False,
                 placeholder='Objective sense',
@@ -125,7 +125,7 @@ def constraint_row_component(constraint: Constraint) -> dash.html.Div:
                 id=COMPONENT_IDS['constraints']['sense'](constraint.name),
                 className='constraint-sense',
                 options=CONSTRAINT_SENSES,
-                value=constraint.sense,
+                value=str(constraint.sense),
                 clearable=False,
                 searchable=False,
                 placeholder='Constraint sense',
