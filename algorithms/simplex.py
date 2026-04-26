@@ -110,10 +110,15 @@ class SimplexTableau:
         where the columns are [RHS | cx+ | cx- | cy+ | cy- | slacks].
         """
         objective_row = np.array(SimplexTableau._canonical_objective(objective))
+
+        if len(constraints) == 0:
+            return cls(_tableau=np.array([objective_row]), _num_constraints=0)
+
         constraint_rows: list[list[float]] = []
         for constraint in constraints:
             constraint_rows.extend(cls._canonical_constraint(constraint))
         num_constraints = len(constraint_rows)
+
         return cls(
             _tableau=np.vstack([
                 np.hstack([constraint_rows, np.eye(num_constraints)]),

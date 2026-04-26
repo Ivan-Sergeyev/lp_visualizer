@@ -112,7 +112,7 @@ The interface is split into two panels:
 ### Running tests
 
 ```bash
-pytest
+python -m pytest tests
 ```
 
 Tests live in the `tests/` directory and are auto-discovered by pytest (configured in `pyproject.toml`).
