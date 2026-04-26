@@ -1,7 +1,7 @@
 import logging
 
 import dash
-# import os
+import os
 import plotly.graph_objects as go
 
 from callbacks import user
@@ -36,7 +36,7 @@ result = solver.get_result()
 
 app = dash.Dash(__name__)
 app.title = 'LP Visualizer'
-# app._favicon = (os.path.join('assets', 'icon.ico'))
+# todo: app._favicon = (os.path.join('assets', 'icon.ico'))
 app.layout = app_wrapper(
     objective=objective,
     constraints=constraints,
@@ -50,4 +50,4 @@ user.register(app)
 
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(debug=os.getenv("DEBUG", "false").lower() == "true")

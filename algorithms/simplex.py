@@ -53,7 +53,7 @@ class Result:
         return str(self.status)
 
 
-_NUM_DECISION_COLS = 5   # RHS + x+ + x− + y+ + y−
+_TABLEAU_FIXED_COLS = 5   # RHS + x+ + x− + y+ + y−
 
 
 @dataclass
@@ -123,7 +123,7 @@ class SimplexTableau:
         )
 
     def get_initial_basis(self) -> list[int]:
-        return list(range(_NUM_DECISION_COLS, self.num_cols()))
+        return list(range(_TABLEAU_FIXED_COLS, self.num_cols()))
 
     def is_rhs_all_non_negative(self) -> bool:
         return bool(np.all(self._tableau[:self._num_constraints, 0] >= -EPSILON))
@@ -146,17 +146,17 @@ class SimplexTableau:
     def num_cols(self) -> int:
         return self._tableau.shape[1]
 
-    def min_ratio(self, col: int) -> int:
+    def min_ratio(self, col: int) -> int | None:
         """
         Bland's rule / minimum-ratio test. Returns the leaving row index
-        or -1 if no positive entry exists (unbounded direction).
+        or None if no positive entry exists (unbounded direction).
         """
         ratios = [
             (self.get_rhs(row) / self._tableau[row, col], row)
             for row in range(self._num_constraints)
             if self._tableau[row, col] > EPSILON
         ]
-        return min(ratios, default=(0, -1))[1]
+        return min(ratios, default=(None, None))[1]
 
     def pivot_row_operation(self, curr_row: int, pivot_row: int, pivot_col: int):
         self._tableau[curr_row] -= self._tableau[curr_row, pivot_col] * self._tableau[pivot_row]
@@ -184,11 +184,11 @@ class SimplexTableau:
         self._tableau = self._tableau[:-1]
 
     def phase_1_drop_row(self, row: int) -> None:
-        self._tableau = np.delete(self._tableau, row)
+        self._tableau = np.delete(self._tableau, row, axis=0)
         self._num_constraints -= 1
 
     def phase_1_remove_artificial_variables(self):
-        self._tableau = self._tableau[:, :_NUM_DECISION_COLS]
+        self._tableau = self._tableau[:, :_TABLEAU_FIXED_COLS]
 
 
 @dataclass
@@ -216,7 +216,7 @@ class SimplexSolver:
                 return OptimizerStatus.OPTIMAL
 
             leave_row = self._tableau.min_ratio(enter_col)
-            if leave_row == -1:
+            if leave_row is None:
                 return OptimizerStatus.UNBOUNDED
 
             self._tableau.pivot(leave_row, enter_col)
@@ -233,7 +233,7 @@ class SimplexSolver:
         self._tableau.phase_1_add_objective(np.zeros(num_cols))
 
         self._artificial_variables = []
-        for row in range(self._tableau._num_constraints):
+        for row in range(self._tableau._num_constraints):  # todo: fix encapsulation violation (self._tableau._num_constraints)
             if self._tableau.get_rhs(row) < -EPSILON:
                 self._tableau.phase_1_add_artificial_variable(row)
                 self._tableau.pivot_row_operation(curr_row=-1, pivot_row=row, pivot_col=num_cols)
@@ -247,6 +247,8 @@ class SimplexSolver:
         basic at zero (degenerate BFS), then remove all artificial columns and
         re-index the basis.
         """
+        # todo: fix encapsulation violations (self._tableau._tableau)
+
         self._tableau.phase_1_drop_objective()
 
         art_set = set(self._artificial_variables)

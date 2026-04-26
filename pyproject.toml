@@ -1,14 +1,13 @@
 [project]
 name = 'lp-visualizer'
-version = '0.1.0'
+version = '0.2.0'
 requires-python = '>=3.14.4'
 dependencies = [
     'dash>=4.1.0',
-    'plotly>=6.7.0',
-    'mip>=1.17.6',
     "dash-iconify>=0.1.2",
     "dash-latex>=0.1.1",
     "numpy>=2.4.4",
+    'plotly>=6.7.0',
 ]
 
 [project.optional-dependencies]
@@ -19,9 +18,7 @@ dev = [
 
 [tool.ruff]
 line-length = 88
+select = ["E", "F", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ['tests']
-
-[tool.setuptools]
-py-modules = []
