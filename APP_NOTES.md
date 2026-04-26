@@ -2,50 +2,50 @@
 
 ## Feature Roadmap
 
-- Create GitHub documentation (README/spec)
-
-- **Implement constraint toggle functionality**
-  - Add on/off buttons and visual feedback for constraints
-  - Track toggle state in model
-  - Apply `dash='dash'` style to disabled constraints
-- **Implement feasible region visualization**
-  - Compute convex hull of constraints + bounding box
-  - Render using `go.Scatter(x=vertices_x_list, y=vertices_y_list, fill="toself")`
-- **Implement model persistence**
-  - Save and load LP models
-  - Reset to default model
-- **Improve visual design**
-  - Fix issue with vertical alignment of "s.t." label (Requires flex container wrapping label + constraint rows)
-  - Add custom favicon
-  - Replace standard components with [Dash Mantine Components (DMC)](https://www.dash-mantine-components.com/)
-  - Add objective vector display box (fixed position using `paper` ref)
-  - Add color pickers for objective arrow, constraint lines, solution, and feasible region
-- **Implement model persistence**
-  - Add alternative model implementation that does not rely on python-mip
-  - Store custom Objective and Constraint classes, implement simplex method to solve LP
-  - Use this to adderss browser reload and multi-user session issues (see [Known Issues])
-- Add comprehensive test suite
+1. **Improve GitHub documentation**
+    - update spec to match the implementation of v0.2
+    - update README to be friendlier to non-specialists
+1. **Implement feasible region visualization**
+    - Compute convex hull of constraints + bounding box
+    - Render using `go.Scatter(x=vertices_x_list, y=vertices_y_list, fill="toself")`
+1. **Implement constraint toggle functionality**
+    - Add on/off buttons and visual feedback for constraints
+    - Track toggle state in model
+    - Apply `dash='dash'` style to disabled constraints
+1. **Implement model persistence**
+    - Save and load LP models
+    - Reset to default model
+1. **Improve visual design**
+    - Add custom favicon
+    - Fix issue with vertical alignment of "s.t." label (Requires flex container wrapping label + constraint rows)
+    - Replace standard components with [Dash Mantine Components (DMC)](https://www.dash-mantine-components.com/)
+    - Add objective vector display box (fixed position using `paper` ref)
+    - Add color pickers for objective arrow, constraint lines, solution, and feasible region
+1. **Add comprehensive test suite**
 
 ## Known Issues
 
-- **Browser page reload causes stale constraint IDs**
-  - Problem: UI refreshes but LP model doesn't → errors when modifying constraints
-  - Possible solutions:
-    - On reload, reset model or re-create initial model
-    - Move to manual LP storage (no shared state optimization)
-  - Related to: Multi-user session state management
-
-- **Model optimized twice at startup (debug=True)**
-  - Intermittent issue; appears related to model initialization location
-  - Last occurred when moving initialization between `linear_program.py` ↔ `app.py`
-  - Needs investigation and stable fix
+1. **Model optimized twice at startup (debug=True)**
+    - Requires investigation
+1. **Store type 'session' is not supported**
+    - Current behavior with 'memory' store type:
+      the model, the store, and the graph cleared on reload
+    - Current behavior after switching to 'session' store type:
+      reloading the page resets the model and the graph, but does not clear the store,
+      leading to a desync between the model, the model, and the graph,
+      as well as store duplication
+    - Requires investigation into potential fix
 
 ## Technical Notes & Design Decisions
 
 - **Python-MIP Constraint Update Behavior**
-  - Coefficient updates (x_coeff, y_coeff) and sense updates (<=, >=, =): Cannot be updated in-place → must remove and re-add constraint
+  - Coefficient updates (x_coeff, y_coeff) and sense updates (<=, >=, =):
+    Cannot be updated in-place -> must remove and re-add constraint
   - Right-hand side (rhs) updates: Can be updated in-place via `constraint.rhs = value`
-  - This pattern is reflected in `LinearProgram._set_mip_constraint_*` methods
+  - According to a surface-level investigation, modifying the model in PuLP is even harder
+  - Switched from python-mip to dcc.Store + manually implemented simplex solver
+    to reduce latency, avoid using singleton object, and support online deployment and
+    multiple concurrent users
 
 - **Last Constraint Reset Behavior**
   - When deleting the last constraint, the system resets it to default instead of removing it
@@ -79,4 +79,8 @@
 
 - [Plotly docs](https://docs.plotly.com/)
 - [Dash documentation](https://dash.plotly.com/)
+
+### Unused
+
 - [Python-MIP documentation](https://docs.python-mip.com/en/latest/name.dash.html)
+- [PuLP](https://coin-or.github.io/pulp/)

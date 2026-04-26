@@ -1,6 +1,15 @@
 # LP Visualizer
 
-An interactive web application for visualizing and solving **2-variable linear programs** in real time. Built with Python, [Dash](https://dash.plotly.com/), and [Plotly](https://plotly.com/python/), it lets you define an LP by typing coefficients directly into the UI and instantly see the feasible region, constraint lines, objective vector, and optimal solution update on the plot.
+Are you a visual learner? Want to understand linear programs but struggle to picture what's actually going on? LP Visualizer is for you.
+
+Linear programs are the first thing you encounter when learning optimization --- and for good reason.
+They power real-world decisions like minimizing shipping costs, maximizing factory output, or balancing a diet.
+But the textbook math can feel abstract.
+This app makes it tangible: tweak a constraint, watch the shaded region shift.
+Move the objective, see the solution snap to a new corner.
+No prior knowledge required --- just curiosity.
+
+Built with [Python](https://python.org), [Dash](https://dash.plotly.com/), and [Plotly](https://plotly.com/python/), LP Visualizer runs in your browser and updates the plot instantly as you type.
 
 ---
 
@@ -46,43 +55,34 @@ Python **3.14** is required (pinned in `.python-version`).
 
 ---
 
-## Installation
+## How to Install & Run
 
-### 1. Clone the repository
+### Option A: uv (recommended)
+
+[uv](https://docs.astral.sh/uv/) handles the Python version, virtual environment, and dependencies in one step.
 
 ```bash
 git clone https://github.com/Ivan-Sergeyev/lp_visualizer.git
 cd lp_visualizer
+uv run app.py
 ```
 
-### 2. Set up a virtual environment (recommended)
+That's it. uv reads `.python-version` and `pyproject.toml` automatically.
+
+### Option B — pip
+
+For those seeking a pure Python experience without additional tools:
 
 ```bash
+git clone https://github.com/Ivan-Sergeyev/lp_visualizer.git
+cd lp_visualizer
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```bash
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install .
-```
-
-To also install development tools (pytest + ruff):
-
-```bash
-pip install ".[dev]"
-```
-
----
-
-## Running the App
-
-```bash
 python app.py
 ```
 
-The app starts in debug mode and is accessible at **[http://127.0.0.1:8050]** by default.
+Either way, the app is accessible at [http://127.0.0.1:8050] once running.
 
 ---
 
@@ -95,14 +95,15 @@ The interface is split into two panels:
   - Enter `x` and `y` coefficients for the objective function.
   - Click **Add Constraint** to append a new constraint row.
   - For each constraint, fill in the `x` coefficient, `y` coefficient, sense (`≤`, `≥`, or `=`), and right-hand side.
-  - Use the **eye** button to temporarily disable a constraint, or the **trash** button to delete it.
+  - Use the **trash** button to delete a constraint.
+  - _Coming soon:_ Use the **eye** button to temporarily disable a constraint.
 
 - **Right panel: plot**
-  - Constraint lines are drawn as thin black lines.
-  - The feasible region is shaded in semi-transparent blue.
-  - The objective vector is shown as a fixed arrow in a corner inset.
-  - When an optimal solution exists, a red circle marks the optimal vertex and the optimal value is displayed below the chart.
-  - Zoom and pan update the infinite lines automatically.
+  - Constraint lines are drawn as thin blue lines.
+  - _Coming soon:_ The feasible region is shaded in semi-transparent blue.
+  - The objective vector is shown as a fixed arrow (_Coming soon:_ in a corner inset).
+  - _Coming soon:_ When an optimal solution exists, a red circle marks the optimal vertex and the optimal value is displayed below the chart.
+  - _Coming soon:_ Zoom and pan update the infinite lines automatically.
 
 ---
 
@@ -128,38 +129,13 @@ Line length is set to 88 characters.
 
 ## Project Structure
 
-```plaintext
-lp_visualizer/
-├── app.py                   # Entry point; creates the Dash app and registers callbacks
-├── pyproject.toml           # Project metadata and dependencies
-├── model/
-│   ├── linear_program.py    # LP state: objective, constraints, solver call
-│   └── domain_transfer_objects.py  # Dataclasses: Objective, Constraint, OptimizationResult
-├── callbacks/
-│   ├── user_actions.py      # Dash callbacks wired to every UI interaction
-│   └── graph_updates.py     # Helper functions that mutate the Plotly figure
-├── components/
-│   └── components.py        # app_layout(); builds the full Dash component tree
-├── assets/                  # Static files (CSS, favicon)
-└── tests/                   # pytest suite
-```
+_Todo: update_
 
 ---
 
 ## Control Flow
 
-```plaintext
-User Action              →  Model Update                →  Plot Update
-───────────────────────────────────────────────────────────────────────────────────────────────
-Change objective sense   →  Flip sense                  →  Flip arrow, re-solve
-Change obj. coefficient  →  Update coefficient          →  Rotate arrow, re-solve
-Add constraint           →  Append constraint           →  Add line, update region, re-solve
-Delete constraint        →  Remove constraint           →  Remove line, update region, re-solve
-Disable constraint       →  Mark as inactive            →  Dash line, update region, re-solve
-Enable constraint        →  Mark as active              →  Solid line, update region, re-solve
-Change constraint coeff  →  Update coefficient          →  Move line, update region, re-solve
-Change constraint sense  →  Update sense                →  Update region, re-solve
-```
+_Todo: update_
 
 ---
 

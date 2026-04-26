@@ -81,7 +81,7 @@ input {
     width: 100%;
 }
 
-input[id*="-coeff"] {
+input[id*="coeff"] {
     text-align: right;
 }
 
