@@ -6,8 +6,7 @@ import dash_iconify
 import dash_latex as dl
 
 from components.common import StorageType
-from model.constraint import Constraint, CONSTRAINT_SENSES
-
+from model.constraint import CONSTRAINT_SENSES, Constraint
 
 type NameOrWildcard = (
     str

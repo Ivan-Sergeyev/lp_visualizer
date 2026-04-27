@@ -1,19 +1,18 @@
 """Tests for algorithms/simplex.py — SimplexTableau, SimplexSolver, and Result types."""
 
 import math
-import numpy as np
-import pytest
 
-from model.constraint import Constraint, ConstraintSense
-from model.objective import Objective, ObjectiveSense
+import numpy as np
+
 from algorithms.simplex import (
     OptimizerStatus,
-    Solution,
     Result,
-    SimplexTableau,
     SimplexSolver,
+    SimplexTableau,
+    Solution,
 )
-
+from model.constraint import Constraint, ConstraintSense
+from model.objective import Objective, ObjectiveSense
 
 # ---------------------------------------------------------------------------
 # Helpers

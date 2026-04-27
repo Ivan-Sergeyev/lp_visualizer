@@ -10,7 +10,6 @@ from components.objective import objective_layout, objective_store
 from model.constraint import Constraint
 from model.objective import Objective
 
-
 PageIDs = TypedDict('PageIDs', {
     'constraints_list': str,
     'add_constraint_button': str,

@@ -1,11 +1,11 @@
-import dash
 import logging
+
+import dash
 import plotly.graph_objects as go
 
-from model.constraint import Constraint
 from algorithms.geometry import Line2D, Point2D, Vector2D
+from model.constraint import Constraint
 from model.objective import Objective, ObjectiveSense
-
 
 logger = logging.getLogger(__name__)
 

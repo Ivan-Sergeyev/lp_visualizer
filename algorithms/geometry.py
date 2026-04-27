@@ -1,7 +1,5 @@
 import math
-
 from dataclasses import dataclass
-
 
 EPSILON: float = 1e-9
 

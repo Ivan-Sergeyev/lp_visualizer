@@ -1,10 +1,10 @@
+import logging
 from dataclasses import dataclass, field
 
 import dash
-import logging
 import plotly.graph_objects as go
 
-
+from algorithms.simplex import SimplexSolver
 from callbacks import graph
 from components.app_layout import PAGE_IDS
 from components.common import STORAGE_TYPE
@@ -12,8 +12,6 @@ from components.constraint import CONSTRAINT_IDS, constraint_layout, constraint_
 from components.objective import OBJECTIVE_IDS
 from model.constraint import Constraint, ConstraintDict, ConstraintSense
 from model.objective import Objective, ObjectiveDict
-from algorithms.simplex import SimplexSolver
-
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +96,7 @@ class ConstraintPatch:
         constraint_dict = constraints_store[pos_in_store]['props']['data']
         constraint_dict['coeff_x'] = coeff_x
 
-        self.constraints_list = dash.Patch()
+        self.constraints = dash.Patch()
         self.figure = graph.figure_update_constraint(figure, constraint_name, Constraint.from_dict(constraint_dict))
         self.store[pos_in_store]['props']['data']['coeff_x'] = coeff_x
         return self
@@ -109,7 +107,7 @@ class ConstraintPatch:
         constraint_dict = constraints_store[pos_in_store]['props']['data']
         constraint_dict['coeff_y'] = coeff_y
 
-        self.constraints_list = dash.Patch()
+        self.constraints = dash.Patch()
         self.figure = graph.figure_update_constraint(figure, constraint_name, Constraint.from_dict(constraint_dict))
         self.store[pos_in_store]['props']['data']['coeff_y'] = coeff_y
         return self
@@ -120,7 +118,7 @@ class ConstraintPatch:
         constraint_dict = constraints_store[pos_in_store]['props']['data']
         constraint_dict['sense'] = sense
 
-        self.constraints_list = dash.Patch()
+        self.constraints = dash.Patch()
         self.figure = dash.Patch()
         self.store[pos_in_store]['props']['data']['sense'] = sense
         return self
@@ -131,7 +129,7 @@ class ConstraintPatch:
         constraint_dict = constraints_store[pos_in_store]['props']['data']
         constraint_dict['rhs'] = rhs
 
-        self.constraints_list = dash.Patch()
+        self.constraints = dash.Patch()
         self.figure = graph.figure_update_constraint(figure, constraint_name, Constraint.from_dict(constraint_dict))
         self.store[pos_in_store]['props']['data']['rhs'] = rhs
         return self

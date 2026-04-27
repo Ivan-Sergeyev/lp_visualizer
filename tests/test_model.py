@@ -2,9 +2,8 @@
 
 import pytest
 
-from model.constraint import Constraint, ConstraintSense, ConstraintDict
-from model.objective import Objective, ObjectiveSense, ObjectiveDict
-
+from model.constraint import Constraint, ConstraintDict, ConstraintSense
+from model.objective import Objective, ObjectiveDict, ObjectiveSense
 
 # ---------------------------------------------------------------------------
 # ConstraintSense

@@ -1,11 +1,13 @@
 import enum
-import numpy as np
 from dataclasses import dataclass
 
+import numpy as np
+
+from algorithms.geometry import (
+    EPSILON,  # numerical zero for pivot and optimality checks
+)
 from model.constraint import Constraint, ConstraintSense
 from model.objective import Objective, ObjectiveSense
-from algorithms.geometry import EPSILON  # numerical zero for pivot and optimality checks
-
 
 # --- Data types ---
 

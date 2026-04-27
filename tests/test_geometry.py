@@ -1,18 +1,16 @@
 """Tests for algorithms/geometry.py"""
 
 import math
-import pytest
 
 from algorithms.geometry import (
     EPSILON,
-    float_lt,
-    float_eq,
-    Vector2D,
-    Point2D,
     Line2D,
+    Point2D,
+    Vector2D,
     box_corners,
+    float_eq,
+    float_lt,
 )
-
 
 # ---------------------------------------------------------------------------
 # float_eq / float_lt
@@ -178,8 +176,8 @@ class TestLine2DIntersectLine:
         assert math.isclose(p.x, 1) and math.isclose(p.y, 1)
 
     def test_coincident_lines_return_none(self):
-        l = Line2D(x=2, y=3, rhs=6)
-        assert l.intersect_line(l) is None
+        line = Line2D(x=2, y=3, rhs=6)
+        assert line.intersect_line(line) is None
 
 
 class TestLine2DBoxIntersect:

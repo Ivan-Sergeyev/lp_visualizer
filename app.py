@@ -1,17 +1,16 @@
 import logging
+import os
 
 import dash
-import os
 import plotly.graph_objects as go
 
+from algorithms.simplex import SimplexSolver
 from callbacks import user
 from callbacks.graph import figure_init_constraint, figure_init_objective
 from components.app_layout import app_wrapper
 from components.common import STORAGE_TYPE
 from model.constraint import Constraint, ConstraintSense
 from model.objective import Objective, ObjectiveSense
-from algorithms.simplex import SimplexSolver
-
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -47,6 +46,7 @@ app.layout = app_wrapper(
 )
 
 user.register(app)
+server = app.server
 
 
 if __name__ == '__main__':
