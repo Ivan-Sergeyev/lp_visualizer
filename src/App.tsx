@@ -20,7 +20,7 @@ import type { Constraint, LPResult, Objective } from './types';
 const DEFAULT_OBJECTIVE: Objective = {
   sense:  ObjectiveSense.MAX,
   coeffX: 6,
-  coeffY: 9,
+  coeffY: 7,
 };
 
 const DEFAULT_CONSTRAINTS: Constraint[] = [
