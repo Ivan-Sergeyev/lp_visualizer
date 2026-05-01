@@ -27,6 +27,13 @@ export function defaultConstraint(id: string): Constraint {
   return { id, coeffX: 0, coeffY: 0, sense: ConstraintSense.LE, rhs: 0 };
 }
 
+/** Type-safe parser for <select> values. Throws on unrecognised input. */
+export function parseConstraintSense(v: string): ConstraintSense {
+  const match = CONSTRAINT_SENSES.find(s => s === v);
+  if (!match) throw new Error(`Invalid ConstraintSense: "${v}"`);
+  return match;
+}
+
 // ── Objective ─────────────────────────────────────────────────────────────────
 
 export const ObjectiveSense = {
@@ -36,6 +43,13 @@ export const ObjectiveSense = {
 export type ObjectiveSense = typeof ObjectiveSense[keyof typeof ObjectiveSense];
 
 export const OBJECTIVE_SENSES = [ObjectiveSense.MAX, ObjectiveSense.MIN] as const;
+
+/** Type-safe parser for <select> values. Throws on unrecognised input. */
+export function parseObjectiveSense(v: string): ObjectiveSense {
+  const match = OBJECTIVE_SENSES.find(s => s === v);
+  if (!match) throw new Error(`Invalid ObjectiveSense: "${v}"`);
+  return match;
+}
 
 export interface Objective {
   sense: ObjectiveSense;

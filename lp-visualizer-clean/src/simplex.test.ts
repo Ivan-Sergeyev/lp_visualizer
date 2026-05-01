@@ -1,572 +1,535 @@
 /**
- * LP Visualiser — test suite
+ * LP Visualiser — test suite (Vitest)
  *
  * Covers:
- *   1. Simplex solver  — status, objective value, and exact optimal point
- *   2. Constraint satisfaction  — solution point verifies every constraint
+ *   1. Simplex solver  — status, objective value, exact optimal point
+ *   2. Constraint satisfaction  — point verifies every constraint
  *   3. Solver properties  — duality, sensitivity, idempotency
  *   4. Geometry  — lineBoxedEndpoints, objectiveUnitVector
- *   5. Graph builder  — buildFigure shape/annotation/data contract
- *
- * Run:  npx tsx src/simplex.test.ts
+ *   5. Graph builder  — buildLayout, buildData, PLOT_CONFIG contract
  */
 
+import { describe, it, expect } from 'vitest';
 import { solveLp } from './simplex';
 import { lineBoxedEndpoints, objectiveUnitVector } from './geometry';
-import { buildFigure, X_RANGE, Y_RANGE } from './graph';
+import { buildLayout, buildData, PLOT_CONFIG, CONSTRAINT_COLORS, X_RANGE, Y_RANGE } from './graph';
 import {
   ConstraintSense,
   ObjectiveSense,
   OptimizerStatus,
   resultLabel,
   EPSILON,
+  parseConstraintSense,
+  parseObjectiveSense,
 } from './types';
 import type { Constraint, LPResult, Objective } from './types';
 
-// ── Mini test runner ───────────────────────────────────────────────────────────
-
-let passed = 0;
-let failed = 0;
-const failures: string[] = [];
-
-function test(name: string, condition: boolean, detail?: string) {
-  if (condition) {
-    passed++;
-    process.stdout.write(`  ✓  ${name}\n`);
-  } else {
-    failed++;
-    const msg = detail ? `${name} — ${detail}` : name;
-    failures.push(msg);
-    process.stdout.write(`  ✗  ${msg}\n`);
-  }
-}
-
-function section(name: string) {
-  process.stdout.write(`\n── ${name}\n`);
-}
-
-// ── Numeric helpers ────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 const TOL = 1e-6;
-
-function near(a: number, b: number, tol = TOL): boolean {
-  return Math.abs(a - b) < tol;
-}
-
-function unitLength(x: number, y: number): boolean {
-  return near(Math.sqrt(x * x + y * y), 1.0);
-}
-
-// ── LP construction helpers ────────────────────────────────────────────────────
+const near = (a: number, b: number) => expect(a).toBeCloseTo(b, 6);
+const unitLength = (x: number, y: number) => near(Math.sqrt(x * x + y * y), 1.0);
 
 let _id = 0;
-const id = () => String(_id++);
+const uid = () => String(_id++);
+const le = (cx: number, cy: number, rhs: number): Constraint =>
+  ({ id: uid(), coeffX: cx, coeffY: cy, sense: ConstraintSense.LE, rhs });
+const ge = (cx: number, cy: number, rhs: number): Constraint =>
+  ({ id: uid(), coeffX: cx, coeffY: cy, sense: ConstraintSense.GE, rhs });
+const eq = (cx: number, cy: number, rhs: number): Constraint =>
+  ({ id: uid(), coeffX: cx, coeffY: cy, sense: ConstraintSense.EQ, rhs });
 
-const le  = (cx: number, cy: number, rhs: number): Constraint =>
-  ({ id: id(), coeffX: cx, coeffY: cy, sense: ConstraintSense.LE, rhs });
-const ge  = (cx: number, cy: number, rhs: number): Constraint =>
-  ({ id: id(), coeffX: cx, coeffY: cy, sense: ConstraintSense.GE, rhs });
-const eq  = (cx: number, cy: number, rhs: number): Constraint =>
-  ({ id: id(), coeffX: cx, coeffY: cy, sense: ConstraintSense.EQ, rhs });
+const max = (cx: number, cy: number, cs: Constraint[]): LPResult =>
+  solveLp({ sense: ObjectiveSense.MAX, coeffX: cx, coeffY: cy }, cs);
+const min = (cx: number, cy: number, cs: Constraint[]): LPResult =>
+  solveLp({ sense: ObjectiveSense.MIN, coeffX: cx, coeffY: cy }, cs);
 
-function max(cx: number, cy: number, cs: Constraint[]): LPResult {
-  return solveLp({ sense: ObjectiveSense.MAX, coeffX: cx, coeffY: cy }, cs);
-}
-function min(cx: number, cy: number, cs: Constraint[]): LPResult {
-  return solveLp({ sense: ObjectiveSense.MIN, coeffX: cx, coeffY: cy }, cs);
-}
-
-/** Returns true if the point satisfies the constraint (within tolerance). */
 function satisfies(c: Constraint, x: number, y: number): boolean {
   const lhs = c.coeffX * x + c.coeffY * y;
   if (c.sense === ConstraintSense.LE) return lhs <= c.rhs + TOL;
   if (c.sense === ConstraintSense.GE) return lhs >= c.rhs - TOL;
-  return near(lhs, c.rhs);                 // EQ
+  return Math.abs(lhs - c.rhs) < TOL;
 }
 
-/** Verifies that the solution point satisfies every constraint in the list. */
-function pointSatisfiesAll(r: LPResult, cs: Constraint[]): boolean {
+function allSatisfied(r: LPResult, cs: Constraint[]): boolean {
   if (!r.solution) return false;
   const [x, y] = r.solution.point;
   return cs.every(c => satisfies(c, x, y));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 1. SIMPLEX SOLVER — STATUS DETECTION
+// 1. SOLVER — STATUS DETECTION
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('Solver — optimal: status and solution presence');
+describe('Solver — optimal', () => {
+  it('box: status OPTIMAL, solution present', () => {
+    const r = max(1, 1, [le(1,0,3), le(0,1,4)]);
+    expect(r.status).toBe(OptimizerStatus.OPTIMAL);
+    expect(r.solution).not.toBeNull();
+  });
 
-{
-  const cs = [le(1,0,3), le(0,1,4)];
-  const r  = max(1, 1, cs);
-  test('box — status is OPTIMAL',   r.status === OptimizerStatus.OPTIMAL);
-  test('box — solution is not null', r.solution !== null);
-}
+  it('min with lower bounds: status OPTIMAL', () => {
+    const r = min(1, 1, [ge(1,0,0), ge(0,1,0), ge(1,1,1)]);
+    expect(r.status).toBe(OptimizerStatus.OPTIMAL);
+    expect(r.solution).not.toBeNull();
+  });
+});
 
-{
-  const cs = [ge(1,0,0), ge(0,1,0), ge(1,1,1)];
-  const r  = min(1, 1, cs);
-  test('min lower-bound — status is OPTIMAL', r.status === OptimizerStatus.OPTIMAL);
-  test('min lower-bound — solution present',  r.solution !== null);
-}
+describe('Solver — unbounded', () => {
+  it('no constraints', () => {
+    const r = max(1, 1, []);
+    expect(r.status).toBe(OptimizerStatus.UNBOUNDED);
+    expect(r.solution).toBeNull();
+  });
 
-section('Solver — unbounded: status and null solution');
+  it('one-sided x', () => {
+    expect(max(1, 0, [ge(1,0,0)]).status).toBe(OptimizerStatus.UNBOUNDED);
+  });
 
-{
-  test('no constraints — UNBOUNDED',       max(1, 1, []).status === OptimizerStatus.UNBOUNDED);
-  test('no constraints — null solution',   max(1, 1, []).solution === null);
-  test('one-sided x — UNBOUNDED',          max(1, 0, [ge(1,0,0)]).status === OptimizerStatus.UNBOUNDED);
-  test('negative cost, no ub — UNBOUNDED', max(-1,-1,[le(1,0,-1)]).status === OptimizerStatus.UNBOUNDED);
-}
+  it('negative cost, no upper bound', () => {
+    expect(max(-1,-1,[le(1,0,-1)]).status).toBe(OptimizerStatus.UNBOUNDED);
+  });
+});
 
-section('Solver — infeasible: status and null solution');
+describe('Solver — infeasible', () => {
+  it('x≤1 and x≥2', () => {
+    const r = max(1, 0, [le(1,0,1), ge(1,0,2)]);
+    expect(r.status).toBe(OptimizerStatus.INFEASIBLE);
+    expect(r.solution).toBeNull();
+  });
 
-{
-  const cs1 = [le(1,0,1), ge(1,0,2)];
-  const r1  = max(1, 0, cs1);
-  test('x≤1 ∧ x≥2 — INFEASIBLE',       r1.status === OptimizerStatus.INFEASIBLE);
-  test('x≤1 ∧ x≥2 — null solution',    r1.solution === null);
+  it('x+y≤0 and x+y≥1', () => {
+    expect(max(1,1,[le(1,1,0), ge(1,1,1)]).status).toBe(OptimizerStatus.INFEASIBLE);
+  });
 
-  test('x+y≤0 ∧ x+y≥1 — INFEASIBLE',  max(1,1,[le(1,1,0),ge(1,1,1)]).status === OptimizerStatus.INFEASIBLE);
-  test('x+y=5 ∧ x+y≤3 — INFEASIBLE',  max(1,0,[eq(1,1,5),le(1,1,3)]).status === OptimizerStatus.INFEASIBLE);
-  test('x=2 ∧ x=3 — INFEASIBLE',      max(1,0,[eq(1,0,2),eq(1,0,3)]).status === OptimizerStatus.INFEASIBLE);
-}
+  it('x+y=5 and x+y≤3', () => {
+    expect(max(1,0,[eq(1,1,5), le(1,1,3)]).status).toBe(OptimizerStatus.INFEASIBLE);
+  });
+
+  it('x=2 and x=3', () => {
+    expect(max(1,0,[eq(1,0,2), eq(1,0,3)]).status).toBe(OptimizerStatus.INFEASIBLE);
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 2. SIMPLEX SOLVER — EXACT OBJECTIVE VALUES
+// 2. SOLVER — OBJECTIVE VALUES
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('Solver — objective value accuracy');
-
-{
-  const cases: Array<{ label: string; r: LPResult; expected: number }> = [
-    { label: 'max x+y box (7)',          r: max(1,1,[le(1,0,3),le(0,1,4)]),                 expected: 7  },
-    { label: 'max x+y diagonal (5)',     r: max(1,1,[le(1,1,5),le(1,0,4),le(0,1,4)]),      expected: 5  },
-    { label: 'min x+y lower (1)',        r: min(1,1,[ge(1,0,0),ge(0,1,0),ge(1,1,1)]),      expected: 1  },
-    { label: 'max x equality (3)',       r: max(1,0,[eq(1,1,3),ge(1,0,0),ge(0,1,0)]),      expected: 3  },
-    { label: 'min x+y equalities (5)',   r: min(1,1,[eq(1,0,2),eq(0,1,3)]),                expected: 5  },
-    { label: 'max 0x+0y (0)',            r: max(0,0,[le(1,0,5)]),                           expected: 0  },
-    { label: 'max -x-y lower (−2)',      r: max(-1,-1,[ge(1,0,1),ge(0,1,1)]),              expected: -2 },
-    { label: 'max 2x (6)',               r: max(2,0,[le(1,0,3),le(0,1,4)]),                expected: 6  },
-    { label: 'min 3x+2y (7)',            r: min(3,2,[ge(1,0,1),ge(0,1,2)]),                expected: 7  },
-    { label: 'max x+y sym (2)',          r: max(1,1,[le(2,1,3),le(1,2,3)]),                expected: 2  },
-    { label: 'max 6x+9y default (36)',   r: solveLp({sense:ObjectiveSense.MAX,coeffX:6,coeffY:9},
-        [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)]),                                       expected: 36 },
+describe('Solver — objective values', () => {
+  const cases: Array<[string, LPResult, number]> = [
+    ['max x+y box (7)',          max(1,1,[le(1,0,3),le(0,1,4)]),                         7  ],
+    ['max x+y diagonal (5)',     max(1,1,[le(1,1,5),le(1,0,4),le(0,1,4)]),               5  ],
+    ['min x+y lower (1)',        min(1,1,[ge(1,0,0),ge(0,1,0),ge(1,1,1)]),               1  ],
+    ['max x equality (3)',       max(1,0,[eq(1,1,3),ge(1,0,0),ge(0,1,0)]),               3  ],
+    ['min x+y equalities (5)',   min(1,1,[eq(1,0,2),eq(0,1,3)]),                         5  ],
+    ['max 0x+0y (0)',            max(0,0,[le(1,0,5)]),                                   0  ],
+    ['max -x-y lower (−2)',      max(-1,-1,[ge(1,0,1),ge(0,1,1)]),                       -2 ],
+    ['max 2x (6)',               max(2,0,[le(1,0,3),le(0,1,4)]),                         6  ],
+    ['min 3x+2y (7)',            min(3,2,[ge(1,0,1),ge(0,1,2)]),                         7  ],
+    ['max x+y symmetric (2)',    max(1,1,[le(2,1,3),le(1,2,3)]),                         2  ],
+    ['max 6x+9y default (36)',   solveLp({sense:ObjectiveSense.MAX,coeffX:6,coeffY:9},
+                                   [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)]),         36 ],
   ];
 
-  for (const { label, r, expected } of cases) {
-    test(label,
-      r.solution !== null && near(r.solution.objectiveValue, expected),
-      r.solution ? `got ${r.solution.objectiveValue.toFixed(6)}` : 'no solution');
-  }
-}
+  it.each(cases)('%s', (_label, r, expected) => {
+    expect(r.solution).not.toBeNull();
+    near(r.solution!.objectiveValue, expected);
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 3. SIMPLEX SOLVER — EXACT OPTIMAL POINTS
+// 3. SOLVER — EXACT OPTIMAL COORDINATES
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('Solver — exact optimal coordinates');
+describe('Solver — optimal coordinates', () => {
+  it('max x+y box → (3,4)', () => {
+    const r = max(1,1,[le(1,0,3),le(0,1,4)]);
+    near(r.solution!.point[0], 3);
+    near(r.solution!.point[1], 4);
+  });
 
-function testPoint(label: string, r: LPResult, ex: number, ey: number) {
-  const ok = r.solution !== null
-    && near(r.solution.point[0], ex)
-    && near(r.solution.point[1], ey);
-  test(label, ok,
-    r.solution
-      ? `got (${r.solution.point[0].toFixed(4)}, ${r.solution.point[1].toFixed(4)}), expected (${ex}, ${ey})`
-      : 'no solution');
-}
+  it('max -x-y with lower bounds → (1,1)', () => {
+    const r = max(-1,-1,[ge(1,0,1),ge(0,1,1)]);
+    near(r.solution!.point[0], 1);
+    near(r.solution!.point[1], 1);
+  });
 
-{
-  testPoint('max x+y box → (3,4)',
-    max(1,1,[le(1,0,3),le(0,1,4)]), 3, 4);
+  it('min x+y equalities → (2,3)', () => {
+    const r = min(1,1,[eq(1,0,2),eq(0,1,3)]);
+    near(r.solution!.point[0], 2);
+    near(r.solution!.point[1], 3);
+  });
 
-  testPoint('max -x-y with lower bounds → (1,1)',
-    max(-1,-1,[ge(1,0,1),ge(0,1,1)]), 1, 1);
+  it('max 6x+9y default → (0,4)', () => {
+    const r = solveLp({sense:ObjectiveSense.MAX,coeffX:6,coeffY:9},
+      [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)]);
+    near(r.solution!.point[0], 0);
+    near(r.solution!.point[1], 4);
+  });
 
-  testPoint('min x+y equalities → (2,3)',
-    min(1,1,[eq(1,0,2),eq(0,1,3)]), 2, 3);
+  it('max x+y symmetric constraints → (1,1)', () => {
+    const r = max(1,1,[le(2,1,3),le(1,2,3)]);
+    near(r.solution!.point[0], 1);
+    near(r.solution!.point[1], 1);
+  });
 
-  testPoint('max 6x+9y default → (0,4)',
-    solveLp({sense:ObjectiveSense.MAX,coeffX:6,coeffY:9},
-      [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)]),
-    0, 4);
+  it('max x with equality x+y=3 → (3,0)', () => {
+    const r = max(1,0,[eq(1,1,3),ge(0,1,0)]);
+    near(r.solution!.point[0], 3);
+    near(r.solution!.point[1], 0);
+  });
 
-  testPoint('max x+y symmetric constraints → (1,1)',
-    max(1,1,[le(2,1,3),le(1,2,3)]), 1, 1);
-
-  testPoint('max x with equality x+y=3, y≥0 → (3,0)',
-    max(1,0,[eq(1,1,3),ge(0,1,0)]), 3, 0);
-
-  testPoint('min 3x+2y, x≥1, y≥2 → (1,2)',
-    min(3,2,[ge(1,0,1),ge(0,1,2)]), 1, 2);
-}
+  it('min 3x+2y, x≥1, y≥2 → (1,2)', () => {
+    const r = min(3,2,[ge(1,0,1),ge(0,1,2)]);
+    near(r.solution!.point[0], 1);
+    near(r.solution!.point[1], 2);
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 4. CONSTRAINT SATISFACTION
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('Solver — solution point satisfies all constraints');
-
-{
-  const problems: Array<{ label: string; obj: Objective; cs: Constraint[] }> = [
-    {
-      label: 'app default LP',
-      obj: { sense: ObjectiveSense.MAX, coeffX: 6, coeffY: 9 },
-      cs: [le(2,3,12), le(1,1,5), ge(1,0,0), ge(0,1,0)],
-    },
-    {
-      label: 'max x+y in box',
-      obj: { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 1 },
-      cs: [le(1,0,3), le(0,1,4)],
-    },
-    {
-      label: 'min x+y with lower bounds',
-      obj: { sense: ObjectiveSense.MIN, coeffX: 1, coeffY: 1 },
-      cs: [ge(1,0,0), ge(0,1,0), ge(1,1,1)],
-    },
-    {
-      label: 'max with equality constraint',
-      obj: { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 0 },
-      cs: [eq(1,1,3), ge(1,0,0), ge(0,1,0)],
-    },
-    {
-      label: 'multiple equality constraints',
-      obj: { sense: ObjectiveSense.MIN, coeffX: 1, coeffY: 1 },
-      cs: [eq(1,0,2), eq(0,1,3)],
-    },
-    {
-      label: 'min 3x+2y, x≥1, y≥2',
-      obj: { sense: ObjectiveSense.MIN, coeffX: 3, coeffY: 2 },
-      cs: [ge(1,0,1), ge(0,1,2)],
-    },
-    {
-      label: 'complex polytope',
-      obj: { sense: ObjectiveSense.MAX, coeffX: 5, coeffY: 4 },
-      cs: [le(6,4,24), le(1,2,6), ge(1,0,0), ge(0,1,0)],
-    },
+describe('Solver — solution satisfies all constraints', () => {
+  const problems: Array<[string, Objective, Constraint[]]> = [
+    ['app default',         {sense:ObjectiveSense.MAX,coeffX:6,coeffY:9},  [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)]],
+    ['max x+y box',         {sense:ObjectiveSense.MAX,coeffX:1,coeffY:1},  [le(1,0,3),le(0,1,4)]],
+    ['min with lower',      {sense:ObjectiveSense.MIN,coeffX:1,coeffY:1},  [ge(1,0,0),ge(0,1,0),ge(1,1,1)]],
+    ['equality constraint', {sense:ObjectiveSense.MAX,coeffX:1,coeffY:0},  [eq(1,1,3),ge(1,0,0),ge(0,1,0)]],
+    ['two equalities',      {sense:ObjectiveSense.MIN,coeffX:1,coeffY:1},  [eq(1,0,2),eq(0,1,3)]],
+    ['min 3x+2y bounded',   {sense:ObjectiveSense.MIN,coeffX:3,coeffY:2},  [ge(1,0,1),ge(0,1,2)]],
+    ['complex polytope',    {sense:ObjectiveSense.MAX,coeffX:5,coeffY:4},  [le(6,4,24),le(1,2,6),ge(1,0,0),ge(0,1,0)]],
   ];
 
-  for (const { label, obj, cs } of problems) {
+  it.each(problems)('%s', (_label, obj, cs) => {
     const r = solveLp(obj, cs);
-    test(`${label} — point satisfies all constraints`,
-      r.status === OptimizerStatus.OPTIMAL && pointSatisfiesAll(r, cs));
-  }
-}
+    expect(r.status).toBe(OptimizerStatus.OPTIMAL);
+    expect(allSatisfied(r, cs)).toBe(true);
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 5. SOLVER PROPERTIES
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('Solver — weak duality: max f ≥ min f over same region');
-
-{
-  const pairs: Array<{ label: string; cs: Constraint[] }> = [
-    { label: 'box',         cs: [le(1,0,3), le(0,1,4), ge(1,0,0), ge(0,1,0)] },
-    { label: 'diamond',     cs: [le(1,1,4), le(1,-1,4), ge(1,0,0), ge(0,1,0)] },
-    { label: 'app default', cs: [le(2,3,12), le(1,1,5), ge(1,0,0), ge(0,1,0)] },
+describe('Solver — weak duality: max ≥ min over same region', () => {
+  const regions: Array<[string, Constraint[]]> = [
+    ['box with bounds',  [le(1,0,3),le(0,1,4),ge(1,0,0),ge(0,1,0)]],
+    ['diamond',          [le(1,1,4),le(1,-1,4),ge(1,0,0),ge(0,1,0)]],
+    ['app default',      [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)]],
   ];
 
-  for (const { label, cs } of pairs) {
+  it.each(regions)('%s', (_label, cs) => {
     const rMax = max(1, 1, cs);
     const rMin = min(1, 1, cs);
-    test(`${label}: max ≥ min`,
-      rMax.status === OptimizerStatus.OPTIMAL &&
-      rMin.status === OptimizerStatus.OPTIMAL &&
-      rMax.solution!.objectiveValue >= rMin.solution!.objectiveValue - TOL);
-  }
-}
+    expect(rMax.status).toBe(OptimizerStatus.OPTIMAL);
+    expect(rMin.status).toBe(OptimizerStatus.OPTIMAL);
+    expect(rMax.solution!.objectiveValue).toBeGreaterThanOrEqual(
+      rMin.solution!.objectiveValue - TOL,
+    );
+  });
+});
 
-section('Solver — MAX/MIN negation symmetry: max cᵀx = −(min −cᵀx)');
+describe('Solver — MAX/MIN negation symmetry', () => {
+  it('max cᵀx = −min(−cᵀx), same point', () => {
+    const cs = [le(1,0,3), le(0,1,4)];
+    const rMax = max(1, 1, cs);
+    const rMin = min(-1, -1, cs);
+    near(rMax.solution!.objectiveValue, -rMin.solution!.objectiveValue);
+    near(rMax.solution!.point[0], rMin.solution!.point[0]);
+    near(rMax.solution!.point[1], rMin.solution!.point[1]);
+  });
+});
 
-{
-  const cs = [le(1,0,3), le(0,1,4)];
-  const rMax = max(1, 1, cs);
-  const rMin = min(-1, -1, cs);
-  test('objective values are negations',
-    rMax.solution !== null && rMin.solution !== null &&
-    near(rMax.solution.objectiveValue, -rMin.solution.objectiveValue));
-  test('optimal points are identical',
-    rMax.solution !== null && rMin.solution !== null &&
-    near(rMax.solution.point[0], rMin.solution.point[0]) &&
-    near(rMax.solution.point[1], rMin.solution.point[1]));
-}
+describe('Solver — idempotency', () => {
+  it('solving twice gives identical result', () => {
+    const cs  = [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)];
+    const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 6, coeffY: 9 };
+    const r1 = solveLp(obj, cs);
+    const r2 = solveLp(obj, cs);
+    expect(r1.status).toBe(r2.status);
+    near(r1.solution!.objectiveValue, r2.solution!.objectiveValue);
+    near(r1.solution!.point[0], r2.solution!.point[0]);
+    near(r1.solution!.point[1], r2.solution!.point[1]);
+  });
+});
 
-section('Solver — idempotency: solving twice gives the same result');
+describe('Solver — redundant constraints', () => {
+  it('adding redundant constraints does not change optimum', () => {
+    const base  = [le(1,0,5), le(0,1,5)];
+    const extra = [le(1,0,5), le(0,1,5), le(1,0,10), le(0,1,10), le(1,1,20)];
+    near(max(1,1,base).solution!.objectiveValue, max(1,1,extra).solution!.objectiveValue);
+  });
+});
 
-{
-  const cs  = [le(2,3,12), le(1,1,5), ge(1,0,0), ge(0,1,0)];
-  const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 6, coeffY: 9 };
-  const r1 = solveLp(obj, cs);
-  const r2 = solveLp(obj, cs);
-  test('same status',    r1.status === r2.status);
-  test('same objective', r1.solution !== null && r2.solution !== null &&
-    near(r1.solution.objectiveValue, r2.solution.objectiveValue));
-  test('same point',     r1.solution !== null && r2.solution !== null &&
-    near(r1.solution.point[0], r2.solution.point[0]) &&
-    near(r1.solution.point[1], r2.solution.point[1]));
-}
-
-section('Solver — redundant constraints do not change the optimum');
-
-{
-  const base  = [le(1,0,5), le(0,1,5)];
-  const extra = [le(1,0,5), le(0,1,5), le(1,0,10), le(0,1,10), le(1,1,20)];
-  const r1 = max(1, 1, base);
-  const r2 = max(1, 1, extra);
-  test('same objective',
-    r1.solution !== null && r2.solution !== null &&
-    near(r1.solution.objectiveValue, r2.solution.objectiveValue));
-}
-
-section('Solver — tightening a binding constraint lowers the maximum monotonically');
-
-{
-  const r5 = max(1,1,[le(1,0,5),le(0,1,4)]);
-  const r3 = max(1,1,[le(1,0,3),le(0,1,4)]);
-  const r2 = max(1,1,[le(1,0,2),le(0,1,4)]);
-  test('B=5 → obj=9', r5.solution !== null && near(r5.solution.objectiveValue, 9));
-  test('B=3 → obj=7', r3.solution !== null && near(r3.solution.objectiveValue, 7));
-  test('B=2 → obj=6', r2.solution !== null && near(r2.solution.objectiveValue, 6));
-  test('obj(B=5) ≥ obj(B=3) ≥ obj(B=2)',
-    r5.solution !== null && r3.solution !== null && r2.solution !== null &&
-    r5.solution.objectiveValue >= r3.solution.objectiveValue - TOL &&
-    r3.solution.objectiveValue >= r2.solution.objectiveValue - TOL);
-}
+describe('Solver — sensitivity: tightening binding constraint lowers max monotonically', () => {
+  it('B=5 → 9, B=3 → 7, B=2 → 6', () => {
+    const r5 = max(1,1,[le(1,0,5),le(0,1,4)]).solution!.objectiveValue;
+    const r3 = max(1,1,[le(1,0,3),le(0,1,4)]).solution!.objectiveValue;
+    const r2 = max(1,1,[le(1,0,2),le(0,1,4)]).solution!.objectiveValue;
+    near(r5, 9); near(r3, 7); near(r2, 6);
+    expect(r5).toBeGreaterThanOrEqual(r3 - TOL);
+    expect(r3).toBeGreaterThanOrEqual(r2 - TOL);
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 6. GEOMETRY — lineBoxedEndpoints
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('Geometry — lineBoxedEndpoints: endpoints lie exactly on the line');
-
 const BL = { x: -1, y: -1 };
 const TR = { x:  6, y:  4 };
 
 function onLine(line: { x: number; y: number; rhs: number }, p: { x: number; y: number }): boolean {
-  return near(line.x * p.x + line.y * p.y, line.rhs);
+  return Math.abs(line.x * p.x + line.y * p.y - line.rhs) < TOL;
 }
 
-{
-  const cases = [
-    { label: 'horizontal y=1',       line: { x: 0, y: 1, rhs: 1  } },
-    { label: 'vertical x=2',         line: { x: 1, y: 0, rhs: 2  } },
-    { label: 'diagonal x+y=3',       line: { x: 1, y: 1, rhs: 3  } },
-    { label: 'steep 3x+y=5',         line: { x: 3, y: 1, rhs: 5  } },
-    { label: 'negative slope x−y=1', line: { x: 1, y:-1, rhs: 1  } },
-    { label: 'app constraint 2x+3y=12', line: { x: 2, y: 3, rhs: 12 } },
-  ];
+describe('Geometry — lineBoxedEndpoints: endpoints lie on the line', () => {
+  const lines = [
+    ['horizontal y=1',          { x: 0, y: 1, rhs: 1  }],
+    ['vertical x=2',            { x: 1, y: 0, rhs: 2  }],
+    ['diagonal x+y=3',          { x: 1, y: 1, rhs: 3  }],
+    ['steep 3x+y=5',            { x: 3, y: 1, rhs: 5  }],
+    ['negative slope x−y=1',    { x: 1, y:-1, rhs: 1  }],
+    ['app constraint 2x+3y=12', { x: 2, y: 3, rhs: 12 }],
+  ] as const;
 
-  for (const { label, line } of cases) {
+  it.each(lines)('%s', (_label, line) => {
     const [p1, p2] = lineBoxedEndpoints(line, BL, TR);
-    test(`${label}: p1 on line`, onLine(line, p1));
-    test(`${label}: p2 on line`, onLine(line, p2));
-  }
-}
+    expect(onLine(line, p1)).toBe(true);
+    expect(onLine(line, p2)).toBe(true);
+  });
+});
 
-section('Geometry — lineBoxedEndpoints: endpoints are distinct for lines crossing the box');
-
-{
-  const crossing = [
-    { label: 'diagonal x+y=3',   line: { x: 1, y: 1, rhs: 3  } },
-    { label: 'vertical x=2',     line: { x: 1, y: 0, rhs: 2  } },
-    { label: 'horizontal y=1',   line: { x: 0, y: 1, rhs: 1  } },
-  ];
-  for (const { label, line } of crossing) {
+describe('Geometry — lineBoxedEndpoints: crossing lines produce distinct endpoints', () => {
+  it.each([
+    ['diagonal x+y=3',  { x: 1, y: 1, rhs: 3 }],
+    ['vertical x=2',    { x: 1, y: 0, rhs: 2 }],
+    ['horizontal y=1',  { x: 0, y: 1, rhs: 1 }],
+  ] as const)('%s', (_label, line) => {
     const [p1, p2] = lineBoxedEndpoints(line, BL, TR);
-    test(`${label}: endpoints are distinct`, !near(p1.x, p2.x) || !near(p1.y, p2.y));
-  }
-}
+    expect(Math.abs(p1.x - p2.x) + Math.abs(p1.y - p2.y)).toBeGreaterThan(TOL);
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 7. GEOMETRY — objectiveUnitVector
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('Geometry — objectiveUnitVector: always a unit vector');
-
-{
-  const objectives: Array<{ label: string; obj: Objective }> = [
-    { label: 'max (1,1)',  obj: { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 1  } },
-    { label: 'max (6,9)',  obj: { sense: ObjectiveSense.MAX, coeffX: 6, coeffY: 9  } },
-    { label: 'min (1,1)',  obj: { sense: ObjectiveSense.MIN, coeffX: 1, coeffY: 1  } },
-    { label: 'max (−1,2)', obj: { sense: ObjectiveSense.MAX, coeffX:-1, coeffY: 2  } },
-    { label: 'max (3,0)',  obj: { sense: ObjectiveSense.MAX, coeffX: 3, coeffY: 0  } },
-    { label: 'max (0,5)',  obj: { sense: ObjectiveSense.MAX, coeffX: 0, coeffY: 5  } },
+describe('Geometry — objectiveUnitVector: always unit length', () => {
+  const cases: Array<[string, Objective]> = [
+    ['max (1,1)',   { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 1  }],
+    ['max (6,9)',   { sense: ObjectiveSense.MAX, coeffX: 6, coeffY: 9  }],
+    ['min (1,1)',   { sense: ObjectiveSense.MIN, coeffX: 1, coeffY: 1  }],
+    ['max (−1,2)', { sense: ObjectiveSense.MAX, coeffX:-1, coeffY: 2  }],
+    ['max (3,0)',   { sense: ObjectiveSense.MAX, coeffX: 3, coeffY: 0  }],
+    ['max (0,5)',   { sense: ObjectiveSense.MAX, coeffX: 0, coeffY: 5  }],
   ];
 
-  for (const { label, obj } of objectives) {
+  it.each(cases)('%s', (_label, obj) => {
     const v = objectiveUnitVector(obj);
-    test(`${label}: unit length`, unitLength(v.x, v.y));
-  }
-}
+    unitLength(v.x, v.y);
+  });
+});
 
-section('Geometry — objectiveUnitVector: MAX and MIN are exactly opposite');
+describe('Geometry — objectiveUnitVector: direction', () => {
+  it('MAX and MIN are exactly opposite', () => {
+    const vMax = objectiveUnitVector({ sense: ObjectiveSense.MAX, coeffX: 3, coeffY: 4 });
+    const vMin = objectiveUnitVector({ sense: ObjectiveSense.MIN, coeffX: 3, coeffY: 4 });
+    near(vMax.x, -vMin.x);
+    near(vMax.y, -vMin.y);
+  });
 
-{
-  const cx = 3, cy = 4;
-  const vMax = objectiveUnitVector({ sense: ObjectiveSense.MAX, coeffX: cx, coeffY: cy });
-  const vMin = objectiveUnitVector({ sense: ObjectiveSense.MIN, coeffX: cx, coeffY: cy });
-  test('x-components are negated', near(vMax.x, -vMin.x));
-  test('y-components are negated', near(vMax.y, -vMin.y));
-}
+  it('max (+,+) → both components positive', () => {
+    const v = objectiveUnitVector({ sense: ObjectiveSense.MAX, coeffX: 3, coeffY: 4 });
+    expect(v.x).toBeGreaterThan(0);
+    expect(v.y).toBeGreaterThan(0);
+  });
 
-section('Geometry — objectiveUnitVector: points in the correct half-plane');
+  it('max (−,+) → x negative, y positive', () => {
+    const v = objectiveUnitVector({ sense: ObjectiveSense.MAX, coeffX: -2, coeffY: 5 });
+    expect(v.x).toBeLessThan(0);
+    expect(v.y).toBeGreaterThan(0);
+  });
 
-{
-  const v1 = objectiveUnitVector({ sense: ObjectiveSense.MAX, coeffX: 3, coeffY: 4 });
-  test('max (+,+) → v.x > 0', v1.x > 0);
-  test('max (+,+) → v.y > 0', v1.y > 0);
-
-  const v2 = objectiveUnitVector({ sense: ObjectiveSense.MAX, coeffX: -2, coeffY: 5 });
-  test('max (−,+) → v.x < 0', v2.x < 0);
-  test('max (−,+) → v.y > 0', v2.y > 0);
-
-  const v3 = objectiveUnitVector({ sense: ObjectiveSense.MIN, coeffX: 3, coeffY: 4 });
-  test('min (+,+) → v.x < 0', v3.x < 0);
-  test('min (+,+) → v.y < 0', v3.y < 0);
-}
+  it('min (+,+) → both components negative', () => {
+    const v = objectiveUnitVector({ sense: ObjectiveSense.MIN, coeffX: 3, coeffY: 4 });
+    expect(v.x).toBeLessThan(0);
+    expect(v.y).toBeLessThan(0);
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 8. GRAPH BUILDER
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('Graph — buildFigure: layout structure');
-
-{
+describe('Graph — buildLayout: structure', () => {
   const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 6, coeffY: 9 };
   const cs = [le(2,3,12), le(1,1,5), ge(1,0,0), ge(0,1,0)];
-  const fig = buildFigure(obj, cs, solveLp(obj, cs));
+  const layout = buildLayout(obj, cs);
 
-  test('layout has xaxis',             !!fig.layout.xaxis);
-  test('layout has yaxis',             !!fig.layout.yaxis);
-  test('xaxis range matches X_RANGE',  JSON.stringify(fig.layout.xaxis!.range) === JSON.stringify(X_RANGE));
-  test('yaxis range matches Y_RANGE',  JSON.stringify(fig.layout.yaxis!.range) === JSON.stringify(Y_RANGE));
-  test('shapes count = constraints',   (fig.layout.shapes  ?? []).length === cs.length);
-  test('exactly one annotation',       (fig.layout.annotations ?? []).length === 1);
-  test('config object is present',     !!fig.config);
-}
+  it('has xaxis with correct range', () => {
+    expect(layout.xaxis).toBeDefined();
+    expect(layout.xaxis!.range).toEqual(X_RANGE);
+  });
 
-section('Graph — buildFigure: constraint shapes are well-formed line objects');
+  it('has yaxis with correct range', () => {
+    expect(layout.yaxis).toBeDefined();
+    expect(layout.yaxis!.range).toEqual(Y_RANGE);
+  });
 
-{
+  it('shape count equals constraint count', () => {
+    expect((layout.shapes ?? []).length).toBe(cs.length);
+  });
+
+  it('exactly one annotation', () => {
+    expect((layout.annotations ?? []).length).toBe(1);
+  });
+});
+
+describe('Graph — buildLayout: shapes are well-formed', () => {
   const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 1 };
   const cs = [le(1,0,3), le(0,1,4), ge(1,1,1)];
-  const fig = buildFigure(obj, cs, { status: OptimizerStatus.NONE, solution: null });
-  const shapes = (fig.layout.shapes ?? []) as Array<Record<string,unknown>>;
+  const shapes = (buildLayout(obj, cs).shapes ?? []) as Array<Record<string, unknown>>;
 
-  test('one shape per constraint', shapes.length === 3);
+  it('one shape per constraint', () => {
+    expect(shapes.length).toBe(3);
+  });
 
-  for (let i = 0; i < shapes.length; i++) {
+  it.each([0, 1, 2])('shape[%i] is a well-formed line', (i) => {
     const s = shapes[i];
-    test(`shape[${i}] type="line"`,  s['type'] === 'line');
-    test(`shape[${i}] has x0/y0`,    s['x0'] !== undefined && s['y0'] !== undefined);
-    test(`shape[${i}] has x1/y1`,    s['x1'] !== undefined && s['y1'] !== undefined);
-    const lineObj = s['line'] as Record<string,unknown>;
-    test(`shape[${i}] has line.color`, typeof lineObj['color'] === 'string');
-  }
-}
+    expect(s['type']).toBe('line');
+    expect(s['x0']).toBeDefined();
+    expect(s['y0']).toBeDefined();
+    expect(s['x1']).toBeDefined();
+    expect(s['y1']).toBeDefined();
+    expect(typeof (s['line'] as Record<string,unknown>)['color']).toBe('string');
+  });
+});
 
-section('Graph — buildFigure: optimal scatter point');
+describe('Graph — buildLayout: objective arrow', () => {
+  it('arrow tip is a unit vector at the origin', () => {
+    const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 3, coeffY: 4 };
+    const ann = (buildLayout(obj, []).annotations ?? [])[0] as Record<string, unknown>;
+    unitLength(ann['x'] as number, ann['y'] as number);
+    expect(ann['ax']).toBeCloseTo(0);
+    expect(ann['ay']).toBeCloseTo(0);
+    expect(ann['x'] as number).toBeGreaterThan(0);
+    expect(ann['y'] as number).toBeGreaterThan(0);
+  });
+});
 
-{
-  const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 6, coeffY: 9 };
-  const cs = [le(2,3,12), le(1,1,5), ge(1,0,0), ge(0,1,0)];
-  const result = solveLp(obj, cs);   // optimal at (0,4)
-  const fig = buildFigure(obj, cs, result);
+describe('Graph — buildLayout: colour palette wraps at index 7', () => {
+  it('9 constraints → shape[7] has same colour as shape[0]', () => {
+    const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 1 };
+    const cs = Array.from({ length: 9 }, (_, i) => le(1, 0, i + 1));
+    const shapes = (buildLayout(obj, cs).shapes ?? []) as Array<Record<string,unknown>>;
+    expect(shapes.length).toBe(9);
+    const color0 = (shapes[0]['line'] as Record<string,unknown>)['color'];
+    const color7 = (shapes[7]['line'] as Record<string,unknown>)['color'];
+    expect(color0).toBe(color7);
+  });
+});
 
-  test('OPTIMAL: exactly one trace',      fig.data.length === 1);
-  const trace = fig.data[0] as Record<string,unknown>;
-  test('OPTIMAL: trace type=scatter',     trace['type'] === 'scatter');
-  test('OPTIMAL: x matches solution',
-    Array.isArray(trace['x']) && near((trace['x'] as number[])[0], 0));
-  test('OPTIMAL: y matches solution',
-    Array.isArray(trace['y']) && near((trace['y'] as number[])[0], 4));
-}
+describe('Graph — buildData', () => {
+  it('OPTIMAL: one scatter trace at the solution point', () => {
+    const result = solveLp(
+      { sense: ObjectiveSense.MAX, coeffX: 6, coeffY: 9 },
+      [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)],
+    );
+    const data = buildData(result);
+    expect(data.length).toBe(1);
+    const trace = data[0] as Record<string, unknown>;
+    expect(trace['type']).toBe('scatter');
+    expect((trace['x'] as number[])[0]).toBeCloseTo(0);
+    expect((trace['y'] as number[])[0]).toBeCloseTo(4);
+  });
 
-section('Graph — buildFigure: no data trace for non-optimal results');
+  it.each([OptimizerStatus.UNBOUNDED, OptimizerStatus.INFEASIBLE, OptimizerStatus.NONE])(
+    '%s: no data traces',
+    (status) => {
+      expect(buildData({ status, solution: null }).length).toBe(0);
+    },
+  );
+});
 
-{
-  const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 0 };
-  test('UNBOUNDED: no traces',  buildFigure(obj, [], { status: OptimizerStatus.UNBOUNDED,  solution: null }).data.length === 0);
-  test('INFEASIBLE: no traces', buildFigure(obj, [], { status: OptimizerStatus.INFEASIBLE, solution: null }).data.length === 0);
-  test('NONE: no traces',       buildFigure(obj, [], { status: OptimizerStatus.NONE,       solution: null }).data.length === 0);
-}
+describe('Graph — PLOT_CONFIG is a stable object', () => {
+  it('is defined and has key properties', () => {
+    expect(PLOT_CONFIG).toBeDefined();
+    expect(typeof PLOT_CONFIG.scrollZoom).toBe('boolean');
+    expect(typeof PLOT_CONFIG.displaylogo).toBe('boolean');
+  });
+});
 
-section('Graph — buildFigure: objective arrow is a unit vector at the origin');
+describe('Graph — CONSTRAINT_COLORS', () => {
+  it('has 7 entries', () => {
+    expect(CONSTRAINT_COLORS.length).toBe(7);
+  });
 
-{
-  const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 3, coeffY: 4 };
-  const fig = buildFigure(obj, [], { status: OptimizerStatus.NONE, solution: null });
-  const ann = (fig.layout.annotations ?? [])[0] as Record<string,unknown>;
-  const ax = ann['x'] as number;
-  const ay = ann['y'] as number;
-  test('arrow tip is a unit vector',       unitLength(ax, ay));
-  test('arrow tail ax=0',                  near(ann['ax'] as number, 0));
-  test('arrow tail ay=0',                  near(ann['ay'] as number, 0));
-  test('tip x > 0 for max(+,+)',           ax > 0);
-  test('tip y > 0 for max(+,+)',           ay > 0);
-}
-
-section('Graph — buildFigure: colour palette wraps after 7 constraints');
-
-{
-  const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 1 };
-  const cs = Array.from({ length: 9 }, (_, i) => le(1, 0, i + 1));
-  const fig = buildFigure(obj, cs, { status: OptimizerStatus.NONE, solution: null });
-  const shapes = (fig.layout.shapes ?? []) as Array<Record<string,unknown>>;
-  test('9 shapes produced', shapes.length === 9);
-  const color0 = (shapes[0]['line'] as Record<string,unknown>)['color'] as string;
-  const color7 = (shapes[7]['line'] as Record<string,unknown>)['color'] as string;
-  test('colour at index 7 equals colour at index 0', color0 === color7);
-}
+  it('all entries are hex colour strings', () => {
+    for (const c of CONSTRAINT_COLORS) {
+      expect(c).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 9. EPSILON CONTRACT
+// 9. TYPES — parsers and constants
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('EPSILON constant');
+describe('parseConstraintSense', () => {
+  it('accepts all valid senses', () => {
+    expect(parseConstraintSense('≤')).toBe(ConstraintSense.LE);
+    expect(parseConstraintSense('≥')).toBe(ConstraintSense.GE);
+    expect(parseConstraintSense('=')).toBe(ConstraintSense.EQ);
+  });
 
-{
-  test('EPSILON > 0',    EPSILON > 0);
-  test('EPSILON < 1e-6', EPSILON < 1e-6);
-}
+  it('throws on invalid input', () => {
+    expect(() => parseConstraintSense('<=')).toThrow();
+    expect(() => parseConstraintSense('')).toThrow();
+  });
+});
+
+describe('parseObjectiveSense', () => {
+  it('accepts all valid senses', () => {
+    expect(parseObjectiveSense('max')).toBe(ObjectiveSense.MAX);
+    expect(parseObjectiveSense('min')).toBe(ObjectiveSense.MIN);
+  });
+
+  it('throws on invalid input', () => {
+    expect(() => parseObjectiveSense('MAX')).toThrow();
+    expect(() => parseObjectiveSense('')).toThrow();
+  });
+});
+
+describe('EPSILON', () => {
+  it('is small and positive', () => {
+    expect(EPSILON).toBeGreaterThan(0);
+    expect(EPSILON).toBeLessThan(1e-6);
+  });
+});
 
 // ═════════════════════════════════════════════════════════════════════════════
-// 10. resultLabel formatting
+// 10. resultLabel
 // ═════════════════════════════════════════════════════════════════════════════
 
-section('resultLabel — output strings');
+describe('resultLabel', () => {
+  it('OPTIMAL: includes value and coordinates', () => {
+    const label = resultLabel({
+      status: OptimizerStatus.OPTIMAL,
+      solution: { point: [1.5, 2.5], objectiveValue: 10.0 },
+    });
+    expect(label).toContain('10.000');
+    expect(label).toContain('1.500');
+    expect(label).toContain('2.500');
+  });
 
-{
-  const label = resultLabel({ status: OptimizerStatus.OPTIMAL, solution: { point: [1.5, 2.5], objectiveValue: 10.0 } });
-  test('OPTIMAL: contains value 10.000', label.includes('10.000'));
-  test('OPTIMAL: contains x 1.500',      label.includes('1.500'));
-  test('OPTIMAL: contains y 2.500',      label.includes('2.500'));
-
-  const byStatus: Array<[OptimizerStatus, string]> = [
+  it.each([
     [OptimizerStatus.UNBOUNDED,  'unbounded'],
     [OptimizerStatus.INFEASIBLE, 'infeasible'],
     [OptimizerStatus.FEASIBLE,   'feasible'],
     [OptimizerStatus.NONE,       'not been solved'],
-  ];
-  for (const [status, keyword] of byStatus) {
-    test(`${status}: label contains "${keyword}"`,
-      resultLabel({ status, solution: null }).toLowerCase().includes(keyword));
-  }
-}
-
-// ═════════════════════════════════════════════════════════════════════════════
-// SUMMARY
-// ═════════════════════════════════════════════════════════════════════════════
-
-process.stdout.write(`\n${'─'.repeat(64)}\n`);
-process.stdout.write(`${passed + failed} tests — ${passed} passed, ${failed} failed\n`);
-
-if (failures.length > 0) {
-  process.stdout.write('\nFailed:\n');
-  failures.forEach(f => process.stdout.write(`  ✗  ${f}\n`));
-  process.exit(1);
-} else {
-  process.stdout.write('All tests passed ✓\n');
-}
+  ] as const)('%s contains "%s"', (status, keyword) => {
+    expect(resultLabel({ status, solution: null }).toLowerCase()).toContain(keyword);
+  });
+});

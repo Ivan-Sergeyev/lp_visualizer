@@ -1,19 +1,30 @@
-import { OBJECTIVE_SENSES, ObjectiveSense } from '../types';
+import { memo, useCallback } from 'react';
+import { OBJECTIVE_SENSES, parseObjectiveSense } from '../types';
 import type { Objective } from '../types';
 import { NumberInput } from './NumberInput';
 
 interface ObjectiveFormProps {
   objective: Objective;
-  onChange: (o: Objective) => void;
+  onChange:  (o: Objective) => void;
 }
 
-export function ObjectiveForm({ objective, onChange }: ObjectiveFormProps) {
+export const ObjectiveForm = memo(function ObjectiveForm({
+  objective,
+  onChange,
+}: ObjectiveFormProps) {
+  const handleSenseChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      onChange({ ...objective, sense: parseObjectiveSense(e.target.value) });
+    },
+    [objective, onChange],
+  );
+
   return (
     <div className="objective-row">
       <select
         className="sense-select"
         value={objective.sense}
-        onChange={e => onChange({ ...objective, sense: e.target.value as ObjectiveSense })}
+        onChange={handleSenseChange}
       >
         {OBJECTIVE_SENSES.map(s => (
           <option key={s} value={s}>{s.toUpperCase()}</option>
@@ -38,4 +49,4 @@ export function ObjectiveForm({ objective, onChange }: ObjectiveFormProps) {
       <span className="var-label">y</span>
     </div>
   );
-}
+});

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-// @ts-ignore – types come from @types/plotly.js
-import Plotly from 'plotly.js-dist-min';
+import { useCallback, useMemo, useState } from 'react';
 
 import { ObjectiveForm } from './components/ObjectiveForm';
 import { ConstraintRow }  from './components/ConstraintRow';
-import { buildFigure }   from './graph';
-import { solveLp }       from './simplex';
+import { Legend }         from './components/Legend';
+import { buildData, buildLayout, PLOT_CONFIG } from './graph';
+import { usePlot }        from './hooks/usePlot';
+import { solveLp }        from './simplex';
 import {
   ConstraintSense,
   defaultConstraint,
@@ -15,6 +15,8 @@ import {
 } from './types';
 import type { Constraint, LPResult, Objective } from './types';
 
+// ── Defaults (match the original Python app) ──────────────────────────────────
+
 const DEFAULT_OBJECTIVE: Objective = {
   sense:  ObjectiveSense.MAX,
   coeffX: 6,
@@ -22,11 +24,13 @@ const DEFAULT_OBJECTIVE: Objective = {
 };
 
 const DEFAULT_CONSTRAINTS: Constraint[] = [
-  { id: '0', coeffX: 2, coeffY: 3, sense: ConstraintSense.LE, rhs: 12 },
-  { id: '1', coeffX: 1, coeffY: 1, sense: ConstraintSense.LE, rhs: 5  },
-  { id: '2', coeffX: 1, coeffY: 0, sense: ConstraintSense.GE, rhs: 0  },
-  { id: '3', coeffX: 0, coeffY: 1, sense: ConstraintSense.GE, rhs: 0  },
+  { id: crypto.randomUUID(), coeffX: 2, coeffY: 3, sense: ConstraintSense.LE, rhs: 12 },
+  { id: crypto.randomUUID(), coeffX: 1, coeffY: 1, sense: ConstraintSense.LE, rhs: 5  },
+  { id: crypto.randomUUID(), coeffX: 1, coeffY: 0, sense: ConstraintSense.GE, rhs: 0  },
+  { id: crypto.randomUUID(), coeffX: 0, coeffY: 1, sense: ConstraintSense.GE, rhs: 0  },
 ];
+
+// ── Status colour (references CSS custom properties) ─────────────────────────
 
 function statusColor(status: OptimizerStatus): string {
   switch (status) {
@@ -37,63 +41,56 @@ function statusColor(status: OptimizerStatus): string {
   }
 }
 
-const DOT_COLORS = ['#60a5fa','#a78bfa','#34d399','#fb923c','#f472b6','#38bdf8','#facc15'];
-
-let idCounter = DEFAULT_CONSTRAINTS.length;
-function nextId(): string { return String(idCounter++); }
+// ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [objective,   setObjective]   = useState<Objective>(DEFAULT_OBJECTIVE);
   const [constraints, setConstraints] = useState<Constraint[]>(DEFAULT_CONSTRAINTS);
+
+  // ── Solve ─────────────────────────────────────────────────────────────────
 
   const result = useMemo<LPResult>(
     () => solveLp(objective, constraints),
     [objective, constraints],
   );
 
-  const figure = useMemo(
-    () => buildFigure(objective, constraints, result),
-    [objective, constraints, result],
+  // ── Build figure pieces — memoised independently ──────────────────────────
+
+  const layout = useMemo(
+    () => buildLayout(objective, constraints),
+    [objective, constraints],
+  );
+  const data = useMemo(
+    () => buildData(result),
+    [result],
   );
 
-  const plotRef     = useRef<HTMLDivElement>(null);
-  const initialised = useRef(false);
+  // ── Drive Plotly via hook ─────────────────────────────────────────────────
 
-  useEffect(() => {
-    if (!plotRef.current) return;
-    const { data, layout, config } = figure;
-    if (!initialised.current) {
-      Plotly.newPlot(plotRef.current, data, layout, config);
-      initialised.current = true;
-    } else {
-      Plotly.react(plotRef.current, data, layout, config);
-    }
-  }, [figure]);
+  const plotRef = usePlot(data, layout, PLOT_CONFIG);
 
-  // Resize the plot when the window resizes
-  useEffect(() => {
-    function handleResize() {
-      if (plotRef.current) Plotly.relayout(plotRef.current, {});
-    }
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+  // ── Constraint callbacks — stable references via useCallback ─────────────
+
+  const addConstraint = useCallback(() => {
+    setConstraints(prev => [...prev, defaultConstraint(crypto.randomUUID())]);
   }, []);
 
-  function addConstraint() {
-    setConstraints(prev => [...prev, defaultConstraint(nextId())]);
-  }
-  function updateConstraint(id: string, updated: Constraint) {
+  const updateConstraint = useCallback((id: string, updated: Constraint) => {
     setConstraints(prev => prev.map(c => c.id === id ? updated : c));
-  }
-  function removeConstraint(id: string) {
+  }, []);
+
+  const removeConstraint = useCallback((id: string) => {
     setConstraints(prev => {
-      if (prev.length <= 1) return [defaultConstraint(nextId())];
+      if (prev.length <= 1) return [defaultConstraint(crypto.randomUUID())];
       return prev.filter(c => c.id !== id);
     });
-  }
+  }, []);
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="app-wrapper">
+
       {/* ── LEFT PANEL ── */}
       <aside className="left-panel">
         <div className="panel-header">
@@ -106,7 +103,7 @@ export default function App() {
           <ObjectiveForm objective={objective} onChange={setObjective} />
         </section>
 
-        <section className="section section--constraints">
+        <section className="section">
           <div className="section-label">Subject to</div>
           <div className="constraints-list">
             {constraints.map((c, i) => (
@@ -139,27 +136,9 @@ export default function App() {
       {/* ── RIGHT PANEL ── */}
       <main className="right-panel">
         <div className="plot-container" ref={plotRef} />
-        <div className="legend">
-          {constraints.map((c, i) => (
-            <span key={c.id} className="legend-item">
-              <span className="legend-swatch" style={{ background: DOT_COLORS[i % DOT_COLORS.length] }} />
-              <span style={{ color: 'var(--muted)' }}>
-                {c.coeffX}x + {c.coeffY}y {c.sense} {c.rhs}
-              </span>
-            </span>
-          ))}
-          <span className="legend-item">
-            <span className="legend-swatch" style={{ background: '#fbbf24', height: '2px', borderRadius: 0 }} />
-            <span style={{ color: 'var(--muted)' }}>Objective direction</span>
-          </span>
-          {result.status === OptimizerStatus.OPTIMAL && (
-            <span className="legend-item">
-              <span className="legend-swatch legend-swatch--circle" style={{ background: '#4ade80' }} />
-              <span style={{ color: '#4ade80' }}>Optimal point</span>
-            </span>
-          )}
-        </div>
+        <Legend constraints={constraints} result={result} />
       </main>
+
     </div>
   );
 }

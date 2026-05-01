@@ -279,9 +279,12 @@ html, body, #root {
   flex-shrink: 0;
 }
 
-.legend-swatch--circle {
-  border-radius: 50%;
-}
+.legend-swatch--circle  { border-radius: 50%; }
+.legend-swatch--line    { background: #fbbf24; height: 2px; border-radius: 0; }
+.legend-swatch--optimal { background: #4ade80; }
+
+.legend-text         { color: var(--muted); }
+.legend-text--optimal { color: #4ade80; }
 
 /* ── Responsive: stack at narrow widths ──────────────────────────────────────── */
 @media (max-width: 900px) {

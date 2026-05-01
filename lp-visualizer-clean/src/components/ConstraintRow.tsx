@@ -1,12 +1,14 @@
-import { ConstraintSense, CONSTRAINT_SENSES } from '../types';
+import { memo, useCallback } from 'react';
+import { CONSTRAINT_COLORS } from '../graph';
+import { CONSTRAINT_SENSES, ConstraintSense, parseConstraintSense } from '../types';
 import type { Constraint } from '../types';
 import { NumberInput } from './NumberInput';
 
 interface ConstraintRowProps {
   constraint: Constraint;
-  index: number;
-  onChange: (c: Constraint) => void;
-  onRemove: () => void;
+  index:      number;
+  onChange:   (c: Constraint) => void;
+  onRemove:   () => void;
 }
 
 const SENSE_COLORS: Record<ConstraintSense, string> = {
@@ -15,10 +17,20 @@ const SENSE_COLORS: Record<ConstraintSense, string> = {
   [ConstraintSense.EQ]: '#34d399',
 };
 
-const DOT_COLORS = ['#60a5fa','#a78bfa','#34d399','#fb923c','#f472b6','#38bdf8','#facc15'];
+export const ConstraintRow = memo(function ConstraintRow({
+  constraint,
+  index,
+  onChange,
+  onRemove,
+}: ConstraintRowProps) {
+  const dotColor = CONSTRAINT_COLORS[index % CONSTRAINT_COLORS.length];
 
-export function ConstraintRow({ constraint, index, onChange, onRemove }: ConstraintRowProps) {
-  const dotColor = DOT_COLORS[index % DOT_COLORS.length];
+  const handleSenseChange = useCallback(
+    (e: React.ChangeEvent<HTMLSelectElement>) => {
+      onChange({ ...constraint, sense: parseConstraintSense(e.target.value) });
+    },
+    [constraint, onChange],
+  );
 
   return (
     <div className="constraint-row">
@@ -44,7 +56,7 @@ export function ConstraintRow({ constraint, index, onChange, onRemove }: Constra
         className="sense-select sense-select--sm"
         value={constraint.sense}
         style={{ color: SENSE_COLORS[constraint.sense] }}
-        onChange={e => onChange({ ...constraint, sense: e.target.value as ConstraintSense })}
+        onChange={handleSenseChange}
       >
         {CONSTRAINT_SENSES.map(s => (
           <option key={s} value={s}>{s}</option>
@@ -57,7 +69,9 @@ export function ConstraintRow({ constraint, index, onChange, onRemove }: Constra
         placeholder="rhs"
         step={0.5}
       />
-      <button className="btn btn--remove" title="Remove constraint" onClick={onRemove}>×</button>
+      <button className="btn btn--remove" title="Remove constraint" onClick={onRemove}>
+        ×
+      </button>
     </div>
   );
-}
+});

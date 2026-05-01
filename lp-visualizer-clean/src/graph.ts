@@ -1,7 +1,9 @@
-import type { Data, Layout, Shape, Annotations } from 'plotly.js';
+import type { Config, Data, Layout, Shape, Annotations } from 'plotly.js';
 import { OptimizerStatus } from './types';
 import type { Constraint, LPResult, Objective } from './types';
 import { lineBoxedEndpoints, objectiveUnitVector } from './geometry';
+
+// ── Viewport ──────────────────────────────────────────────────────────────────
 
 export const X_RANGE: [number, number] = [-1, 6];
 export const Y_RANGE: [number, number] = [-1, 4];
@@ -9,9 +11,22 @@ export const Y_RANGE: [number, number] = [-1, 4];
 const BL = { x: X_RANGE[0], y: Y_RANGE[0] };
 const TR = { x: X_RANGE[1], y: Y_RANGE[1] };
 
-const CONSTRAINT_COLORS = [
-  '#60a5fa','#a78bfa','#34d399','#fb923c','#f472b6','#38bdf8','#facc15',
-];
+// ── Colour palette (single source of truth — imported by ConstraintRow too) ───
+
+export const CONSTRAINT_COLORS = [
+  '#60a5fa', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#38bdf8', '#facc15',
+] as const;
+
+// ── Static Plotly config (never changes) ──────────────────────────────────────
+
+export const PLOT_CONFIG: Partial<Config> = {
+  displayModeBar: true,
+  modeBarButtonsToRemove: ['toImage', 'sendDataToCloud'],
+  displaylogo: false,
+  scrollZoom: true,
+};
+
+// ── Shape / annotation builders ───────────────────────────────────────────────
 
 function constraintShape(c: Constraint, index: number): Partial<Shape> {
   const line = { x: c.coeffX, y: c.coeffY, rhs: c.rhs };
@@ -41,31 +56,17 @@ function objectiveAnnotation(obj: Objective): Partial<Annotations> {
   };
 }
 
-export interface PlotlyFigure {
-  data:   Partial<Data>[];
-  layout: Partial<Layout>;
-  config: object;
-}
+// ── Public figure builders ────────────────────────────────────────────────────
 
-export function buildFigure(
+/**
+ * Builds the Plotly layout from objective + constraints.
+ * Memoise independently of result — layout only changes when the LP definition changes.
+ */
+export function buildLayout(
   objective: Objective,
   constraints: Constraint[],
-  result: LPResult,
-): PlotlyFigure {
-  const data: Partial<Data>[] = [];
-  if (result.status === OptimizerStatus.OPTIMAL && result.solution) {
-    const [x, y] = result.solution.point;
-    data.push({
-      type: 'scatter',
-      x: [x], y: [y],
-      mode: 'markers',
-      marker: { color: '#4ade80', size: 14, symbol: 'circle', line: { color: '#0f1117', width: 2 } },
-      hovertemplate: `<b>Optimal</b><br>x = ${x.toFixed(3)}<br>y = ${y.toFixed(3)}<extra></extra>`,
-      showlegend: false,
-    } as Partial<Data>);
-  }
-
-  const layout: Partial<Layout> = {
+): Partial<Layout> {
+  return {
     paper_bgcolor: '#161b22',
     plot_bgcolor:  '#0d1117',
     xaxis: {
@@ -84,17 +85,25 @@ export function buildFigure(
     },
     shapes:      constraints.map((c, i) => constraintShape(c, i)),
     annotations: [objectiveAnnotation(objective)],
-    margin: { l: 52, r: 24, t: 24, b: 52 },
+    margin:   { l: 52, r: 24, t: 24, b: 52 },
     dragmode: 'pan',
     hoverlabel: { bgcolor: '#1c2333', bordercolor: '#30363d', font: { color: '#e6edf3' } },
   };
+}
 
-  const config = {
-    displayModeBar: true,
-    modeBarButtonsToRemove: ['toImage', 'sendDataToCloud'],
-    displaylogo: false,
-    scrollZoom: true,
-  };
-
-  return { data, layout, config };
+/**
+ * Builds the Plotly data traces from the solver result.
+ * Memoised independently — data only changes when result changes.
+ */
+export function buildData(result: LPResult): Partial<Data>[] {
+  if (result.status !== OptimizerStatus.OPTIMAL || !result.solution) return [];
+  const [x, y] = result.solution.point;
+  return [{
+    type: 'scatter',
+    x: [x], y: [y],
+    mode: 'markers',
+    marker: { color: '#4ade80', size: 14, symbol: 'circle', line: { color: '#0f1117', width: 2 } },
+    hovertemplate: `<b>Optimal</b><br>x = ${x.toFixed(3)}<br>y = ${y.toFixed(3)}<extra></extra>`,
+    showlegend: false,
+  } as Partial<Data>];
 }
