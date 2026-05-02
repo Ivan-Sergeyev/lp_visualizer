@@ -8,6 +8,14 @@ interface ObjectiveFormProps {
   onChange:  (o: Objective) => void;
 }
 
+/**
+ * The objective function editor: [MIN|MAX] [cx] x + [cy] y
+ *
+ * The sense dropdown updates immediately; coefficient inputs use NumberInput
+ * for deferred-commit behaviour (blur or Enter to propagate).
+ *
+ * Memoised: re-renders only when objective or onChange changes.
+ */
 export const ObjectiveForm = memo(function ObjectiveForm({
   objective,
   onChange,

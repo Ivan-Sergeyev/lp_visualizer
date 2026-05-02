@@ -2,85 +2,66 @@
 
 ## Feature Roadmap
 
-1. **Improve GitHub documentation**
-    - update spec to match the implementation of v0.2
-    - update README to be friendlier to non-specialists
-1. **Implement feasible region visualization**
-    - Compute convex hull of constraints + bounding box
-    - Render using `go.Scatter(x=vertices_x_list, y=vertices_y_list, fill="toself")`
-1. **Implement constraint toggle functionality**
-    - Add on/off buttons and visual feedback for constraints
-    - Track toggle state in model
-    - Apply `dash='dash'` style to disabled constraints
-1. **Implement model persistence**
-    - Save and load LP models
-    - Reset to default model
-1. **Improve visual design**
-    - Add custom favicon
-    - Fix issue with vertical alignment of "s.t." label (Requires flex container wrapping label + constraint rows)
-    - Replace standard components with [Dash Mantine Components (DMC)](https://www.dash-mantine-components.com/)
-    - Add objective vector display box (fixed position using `paper` ref)
-    - Add color pickers for objective arrow, constraint lines, solution, and feasible region
-1. **Add comprehensive test suite**
+1. **Implement feasible region visualisation**
+   - Compute convex hull of constraints intersected with the bounding box.
+   - Render as a filled `go.Scatter` trace with `fill: 'toself'` and a semi-transparent colour.
+   - Bold boundary segments and vertex markers as separate traces or shapes.
 
-## Known Issues
+2. **Implement constraint toggle functionality**
+   - Add an eye-icon button to each `ConstraintRow`; track `enabled: boolean` on `Constraint`.
+   - Excluded constraints: render as dashed lines in the plot and skip them in `solveLp`.
 
-1. **Model optimized twice at startup (debug=True)**
-    - Requires investigation
-1. **Store type 'session' is not supported**
-    - Current behavior with 'memory' store type:
-      the model, the store, and the graph cleared on reload
-    - Current behavior after switching to 'session' store type:
-      reloading the page resets the model and the graph, but does not clear the store,
-      leading to a desync between the model, the model, and the graph,
-      as well as store duplication
-    - Requires investigation into potential fix
+3. **Adaptive sign display**
+   - When a coefficient is negative, show `− |coeff|` instead of `+ −|coeff|` in the constraint rows and legend.
 
-## Technical Notes & Design Decisions
+4. **Implement model persistence**
+   - Save/load LP models to `localStorage` or a shareable URL hash.
+   - Add a reset-to-default button.
 
-- **Python-MIP Constraint Update Behavior**
-  - Coefficient updates (x_coeff, y_coeff) and sense updates (<=, >=, =):
-    Cannot be updated in-place -> must remove and re-add constraint
-  - Right-hand side (rhs) updates: Can be updated in-place via `constraint.rhs = value`
-  - According to a surface-level investigation, modifying the model in PuLP is even harder
-  - Switched from python-mip to dcc.Store + manually implemented simplex solver
-    to reduce latency, avoid using singleton object, and support online deployment and
-    multiple concurrent users
+5. **Rescaling constraint lines on zoom/pan**
+   - `lineBoxedEndpoints` in `geometry.ts` clips to the fixed viewport `X_RANGE / Y_RANGE`.
+   - On zoom/pan, lines should recompute endpoints against the new visible range.
+   - Hook into Plotly's `plotly_relayout` event to get the current axis ranges and rebuild shapes.
 
-- **Last Constraint Reset Behavior**
-  - When deleting the last constraint, the system resets it to default instead of removing it
-  - Reason: `master_constraint_callback()` depends on at least one constraint existing
-  - Without this, the callback breaks when the constraint list becomes empty
-  - This behavior is implemented in `remove_constraint()` inside `user_actions.register()`
+6. **Improve visual design**
+   - Objective vector corner inset box (fixed position using `paper` reference in Plotly).
+   - Colour pickers for objective arrow, constraint lines, solution, and feasible region.
 
-- **Math Rendering**
-  - Current approach: DashLatex (stable, recommended)
-  - Alternative: MathJax via CDN
-    - Setup:
+## Design Decisions
 
-      ```python
-      app = dash.Dash(
-          __name__,
-          external_scripts=[
-              'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-MML-AM_CHTML'
-          ]
-      )
-      ```
+### Last-constraint reset behaviour
+When `removeConstraint` is called and only one constraint remains, it is replaced with a fresh
+default (`0x + 0y ≤ 0`) rather than removed. See the comment in `App.tsx`'s `removeConstraint`
+callback. The solver and plot do not handle an empty constraint list.
 
-    - Syntax: Use `\\(x\\)` or `r'\(x\)'` instead of `dl.DashLatex(r'$x$')`
-    - Status: Not recommended — rendering breaks after multiple page reloads
+### NumberInput deferred commit
+`NumberInput` holds a local string state while the user types and only propagates a parsed number
+to the parent on blur or Enter. See the JSDoc in `components/NumberInput.tsx`. This avoids
+triggering a re-solve on every keystroke and prevents the field from snapping to zero while a
+partial value like `−` is being typed.
 
-- **CSS/Input Styling Quirks**
-  - Issue: Dash wraps inputs in divs; stepper buttons generate automatically even with `min`/`max`/`step=None`
-  - Impact: Default styling overrides and element width mismatch
-  - Solution: Use `input[id*="-coeff"]` selector with `text-align: right; width: 100%`
+### Pure TypeScript simplex solver
+The LP is solved in-browser by a two-phase simplex implementation in `simplex.ts`, with no
+external math library. See the block comment above `FIXED_COLS` in that file for the full
+tableau column layout and the rationale for splitting `x` and `y` into positive/negative parts.
+
+### Plotly two-effect lifecycle
+`usePlot` uses two separate `useEffect` calls — see the inline comments in
+`components/usePlot.ts`. The split is necessary to separate mount/unmount (StrictMode-safe) from
+figure updates (run on every dependency change).
+
+## Known Limitations
+
+- **Fixed viewport**: Constraint lines are clipped to `X_RANGE = [-1, 6]`, `Y_RANGE = [-1, 4]`
+  in `graph.ts`. Zooming or panning in Plotly does not update the clip region — lines end at the
+  initial boundary.
+- **2-variable only**: The solver and UI are hard-coded for `x` and `y`. Generalising to `n`
+  variables would require reworking the tableau encoding, the form, and the plot.
+- **`tsx` devDependency installed but unused** in any npm script — can be removed if not needed
+  for future scripting tasks.
 
 ## Resources
 
-- [Plotly docs](https://docs.plotly.com/)
-- [Dash documentation](https://dash.plotly.com/)
-
-### Unused
-
-- [Python-MIP documentation](https://docs.python-mip.com/en/latest/name.dash.html)
-- [PuLP](https://coin-or.github.io/pulp/)
+- [Plotly.js docs](https://plotly.com/javascript/)
+- [Vite docs](https://vitejs.dev/)
+- [Vitest docs](https://vitest.dev/)

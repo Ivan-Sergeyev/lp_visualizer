@@ -1,24 +1,27 @@
 import type { Config, Data, Layout, Shape, Annotations } from 'plotly.js';
-import { OptimizerStatus } from './types';
+import { OptimizerStatus, CONSTRAINT_COLORS } from './types';
 import type { Constraint, LPResult, Objective } from './types';
 import { lineBoxedEndpoints, objectiveUnitVector } from './geometry';
 
 // ── Viewport ──────────────────────────────────────────────────────────────────
 
+/**
+ * Fixed plot bounds. Constraint lines are clipped to this region.
+ * Also imported by simplex.test.ts to check that solutions lie within the viewport.
+ */
 export const X_RANGE: [number, number] = [-1, 6];
 export const Y_RANGE: [number, number] = [-1, 4];
 
 const BL = { x: X_RANGE[0], y: Y_RANGE[0] };
 const TR = { x: X_RANGE[1], y: Y_RANGE[1] };
 
-// ── Colour palette (single source of truth — imported by ConstraintRow too) ───
+// ── Static Plotly config ──────────────────────────────────────────────────────
 
-export const CONSTRAINT_COLORS = [
-  '#60a5fa', '#a78bfa', '#34d399', '#fb923c', '#f472b6', '#38bdf8', '#facc15',
-] as const;
-
-// ── Static Plotly config (never changes) ──────────────────────────────────────
-
+/**
+ * Plotly UI config shared across all renders.
+ * 'toImage' and 'sendDataToCloud' are removed from the modebar as they are not
+ * useful here; scroll-to-zoom is enabled for interactive exploration.
+ */
 export const PLOT_CONFIG: Partial<Config> = {
   displayModeBar: true,
   modeBarButtonsToRemove: ['toImage', 'sendDataToCloud'],
@@ -28,6 +31,7 @@ export const PLOT_CONFIG: Partial<Config> = {
 
 // ── Shape / annotation builders ───────────────────────────────────────────────
 
+/** Builds a Plotly line shape for one constraint, clipped to the viewport. */
 function constraintShape(c: Constraint, index: number): Partial<Shape> {
   const line = { x: c.coeffX, y: c.coeffY, rhs: c.rhs };
   const [p1, p2] = lineBoxedEndpoints(line, BL, TR);
@@ -41,6 +45,7 @@ function constraintShape(c: Constraint, index: number): Partial<Shape> {
   } as Partial<Shape>;
 }
 
+/** Builds the amber arrow annotation that shows the objective direction. */
 function objectiveAnnotation(obj: Objective): Partial<Annotations> {
   const tip = objectiveUnitVector(obj);
   return {
@@ -59,8 +64,9 @@ function objectiveAnnotation(obj: Objective): Partial<Annotations> {
 // ── Public figure builders ────────────────────────────────────────────────────
 
 /**
- * Builds the Plotly layout from objective + constraints.
- * Memoise independently of result — layout only changes when the LP definition changes.
+ * Builds the Plotly layout (axes, constraint lines, objective arrow) from the
+ * current LP definition. Memoised independently of the solver result so it only
+ * recomputes when the objective or constraints change.
  */
 export function buildLayout(
   objective: Objective,
@@ -92,8 +98,10 @@ export function buildLayout(
 }
 
 /**
- * Builds the Plotly data traces from the solver result.
- * Memoised independently — data only changes when result changes.
+ * Builds the Plotly data traces from the solver result. Returns an empty array
+ * unless the result is OPTIMAL, in which case it returns a single green circle
+ * marker at the optimal point. Memoised independently of the layout so it only
+ * recomputes when the result changes.
  */
 export function buildData(result: LPResult): Partial<Data>[] {
   if (result.status !== OptimizerStatus.OPTIMAL || !result.solution) return [];

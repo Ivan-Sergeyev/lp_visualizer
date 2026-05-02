@@ -5,9 +5,11 @@ import Plotly from 'plotly.js-dist-min';
 
 /**
  * Manages the full Plotly lifecycle for a <div> ref:
- *  - newPlot on mount, purge on unmount  (survives StrictMode double-invoke)
- *  - Plotly.react on every figure change (data / layout / config)
- *  - Plotly.Plots.resize on window resize (correct resize API, not relayout)
+ *  - `newPlot` on mount, `purge` on unmount (the purge cleanup makes React 18
+ *    StrictMode's double-invoke safe — the second mount gets a clean element)
+ *  - `Plotly.react` on every figure change (data / layout / config)
+ *  - `Plotly.Plots.resize` on window resize (correct API; `relayout` would
+ *    re-render all traces unnecessarily)
  */
 export function usePlot(
   data:   Partial<Data>[],
@@ -16,8 +18,9 @@ export function usePlot(
 ): RefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Mount / unmount — intentionally empty deps so this only runs once per mount.
-  // The purge cleanup makes StrictMode's double-invoke safe.
+  // Empty deps: runs once per mount. Captures the element in `el` so the cleanup
+  // closure holds the reference even after the component unmounts and ref.current
+  // is cleared.
   useEffect(() => {
     if (!ref.current) return;
     Plotly.newPlot(ref.current, data, layout, config);
@@ -26,13 +29,15 @@ export function usePlot(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update figure whenever data or layout changes.
+  // Runs whenever data, layout, or config changes. `Plotly.react` is a diff-aware
+  // update that avoids a full re-render when only a subset of the figure changed.
   useEffect(() => {
     if (!ref.current) return;
     Plotly.react(ref.current, data, layout, config);
   }, [data, layout, config]);
 
-  // Resize with the correct Plotly API (not relayout which re-renders all traces).
+  // Separate effect so the resize listener is registered once and never torn down
+  // and re-added on figure changes.
   useEffect(() => {
     function handleResize() {
       if (ref.current) Plotly.Plots.resize(ref.current);

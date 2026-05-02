@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { solveLp } from './simplex';
 import { lineBoxedEndpoints, objectiveUnitVector } from './geometry';
-import { buildLayout, buildData, PLOT_CONFIG, CONSTRAINT_COLORS, X_RANGE, Y_RANGE } from './graph';
+import { buildLayout, buildData, PLOT_CONFIG, X_RANGE, Y_RANGE } from './graph';
 import {
   ConstraintSense,
   ObjectiveSense,
@@ -21,6 +21,7 @@ import {
   EPSILON,
   parseConstraintSense,
   parseObjectiveSense,
+  CONSTRAINT_COLORS,
 } from './types';
 import type { Constraint, LPResult, Objective } from './types';
 

@@ -3,12 +3,16 @@
 ## Commands
 
 ```bash
-npm run dev          # dev server (HMR)
-npm run build        # tsc -b && vite build  — typecheck + bundle
-npm run lint         # eslint on all *.ts / *.tsx
-npm test             # vitest run  (single pass)
+npm run dev      # dev server (HMR)
+npm run build    # typecheck (tsc -b) then bundle (vite build)
+npm run preview  # serve dist/ locally — run build first
+npm run lint     # eslint on all *.ts / *.tsx
+npm test         # vitest run  (single pass)
 npm run test:watch   # vitest      (watch mode)
 ```
+
+Deployment is automatic: push to `frontend-only` → GitHub Actions runs build → deploys to Pages.
+`base: '/lp_visualizer/'` in `vite.config.ts` is required for asset paths to resolve correctly under the Pages subdirectory. Do not remove it.
 
 ## Architecture
 
@@ -16,17 +20,16 @@ Pure frontend — no server, no API calls. All computation runs in the browser.
 
 ```
 src/
-  types.ts            # all domain types + EPSILON + sense parsers; no imports from other src files
+  types.ts            # all domain types + EPSILON + sense parsers + CONSTRAINT_COLORS; no imports from other src files
   geometry.ts         # lineBoxedEndpoints, objectiveUnitVector — pure math, no React
   simplex.ts          # two-phase Simplex solver — pure math, no React
-  graph.ts            # buildLayout(), buildData(), PLOT_CONFIG, CONSTRAINT_COLORS
-  hooks/
-    usePlot.ts        # Plotly lifecycle hook — newPlot/purge/react/resize
+  graph.ts            # buildLayout(), buildData(), PLOT_CONFIG — imports CONSTRAINT_COLORS from types.ts
   components/
-    ConstraintRow.tsx  # memo-ised; imports CONSTRAINT_COLORS from graph.ts
+    ConstraintRow.tsx  # memo-ised; imports CONSTRAINT_COLORS from types.ts
     ObjectiveForm.tsx  # memo-ised
     Legend.tsx         # memo-ised; renders constraint swatches + result badge
     NumberInput.tsx    # controlled input with local string state
+    usePlot.ts        # Plotly lifecycle hook — newPlot/purge/react/resize
   App.tsx             # domain state + useMemo + useCallback; no Plotly logic
   simplex.test.ts     # Vitest suite (excluded from app build)
   index.css           # global styles + CSS custom properties
@@ -102,7 +105,7 @@ onChange({ ...c, sense: parseConstraintSense(e.target.value) })
 
 ## Colour palette — single source of truth
 
-`CONSTRAINT_COLORS` is exported from `graph.ts`. Import from there in any component that needs it. Do not redeclare it.
+`CONSTRAINT_COLORS` is exported from `types.ts`. Import from there in any component or module that needs it. Do not redeclare it.
 
 ## IDs — use crypto.randomUUID()
 

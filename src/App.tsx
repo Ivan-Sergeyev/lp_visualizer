@@ -4,7 +4,7 @@ import { ObjectiveForm } from './components/ObjectiveForm';
 import { ConstraintRow }  from './components/ConstraintRow';
 import { Legend }         from './components/Legend';
 import { buildData, buildLayout, PLOT_CONFIG } from './graph';
-import { usePlot }        from './hooks/usePlot';
+import { usePlot }        from './components/usePlot';
 import { solveLp }        from './simplex';
 import {
   ConstraintSense,
@@ -15,8 +15,9 @@ import {
 } from './types';
 import type { Constraint, LPResult, Objective } from './types';
 
-// ── Defaults (match the original Python app) ──────────────────────────────────
+// ── Default model ─────────────────────────────────────────────────────────────
 
+// A small bounded LP that has a clean optimal solution at (3, 2) with value 32.
 const DEFAULT_OBJECTIVE: Objective = {
   sense:  ObjectiveSense.MAX,
   coeffX: 6,
@@ -30,8 +31,12 @@ const DEFAULT_CONSTRAINTS: Constraint[] = [
   { id: crypto.randomUUID(), coeffX: 0, coeffY: 1, sense: ConstraintSense.GE, rhs: 0  },
 ];
 
-// ── Status colour (references CSS custom properties) ─────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
+/**
+ * Maps solver status to a CSS custom property for the Result panel border/text.
+ * References variables defined in index.css.
+ */
 function statusColor(status: OptimizerStatus): string {
   switch (status) {
     case OptimizerStatus.OPTIMAL:    return 'var(--green)';
@@ -47,15 +52,15 @@ export default function App() {
   const [objective,   setObjective]   = useState<Objective>(DEFAULT_OBJECTIVE);
   const [constraints, setConstraints] = useState<Constraint[]>(DEFAULT_CONSTRAINTS);
 
-  // ── Solve ─────────────────────────────────────────────────────────────────
-
+  // Solve on every model change. solveLp is pure and fast enough for synchronous
+  // execution; no debounce is needed at this scale.
   const result = useMemo<LPResult>(
     () => solveLp(objective, constraints),
     [objective, constraints],
   );
 
-  // ── Build figure pieces — memoised independently ──────────────────────────
-
+  // Build layout and data separately so each only recomputes when its inputs change.
+  // Layout depends on the LP definition; data depends only on the solver result.
   const layout = useMemo(
     () => buildLayout(objective, constraints),
     [objective, constraints],
@@ -65,12 +70,9 @@ export default function App() {
     [result],
   );
 
-  // ── Drive Plotly via hook ─────────────────────────────────────────────────
-
   const plotRef = usePlot(data, layout, PLOT_CONFIG);
 
-  // ── Constraint callbacks — stable references via useCallback ─────────────
-
+  // Stable callback references prevent unnecessary re-renders of memoised children.
   const addConstraint = useCallback(() => {
     setConstraints(prev => [...prev, defaultConstraint(crypto.randomUUID())]);
   }, []);
@@ -79,14 +81,14 @@ export default function App() {
     setConstraints(prev => prev.map(c => c.id === id ? updated : c));
   }, []);
 
+  // When the last constraint is removed, reset it to a default row rather than
+  // producing an empty list, which the solver and plot do not handle.
   const removeConstraint = useCallback((id: string) => {
     setConstraints(prev => {
       if (prev.length <= 1) return [defaultConstraint(crypto.randomUUID())];
       return prev.filter(c => c.id !== id);
     });
   }, []);
-
-  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="app-wrapper">

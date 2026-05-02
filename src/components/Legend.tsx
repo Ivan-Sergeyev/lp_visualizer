@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { CONSTRAINT_COLORS } from '../graph';
+import { CONSTRAINT_COLORS } from '../types';
 import { OptimizerStatus } from '../types';
 import type { Constraint, LPResult } from '../types';
 
@@ -8,6 +8,15 @@ interface LegendProps {
   result:      LPResult;
 }
 
+/**
+ * Plot legend rendered below the Plotly chart.
+ *
+ * Shows one swatch + formula per constraint (colours match the plot lines),
+ * a fixed amber swatch for the objective direction arrow, and — when the result
+ * is OPTIMAL — a green swatch for the optimal point marker.
+ *
+ * Memoised: re-renders only when constraints or result change.
+ */
 export const Legend = memo(function Legend({ constraints, result }: LegendProps) {
   return (
     <div className="legend">

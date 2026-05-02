@@ -1,22 +1,36 @@
 import { memo, useCallback } from 'react';
-import { CONSTRAINT_COLORS } from '../graph';
+import { CONSTRAINT_COLORS } from '../types';
 import { CONSTRAINT_SENSES, ConstraintSense, parseConstraintSense } from '../types';
 import type { Constraint } from '../types';
 import { NumberInput } from './NumberInput';
 
 interface ConstraintRowProps {
   constraint: Constraint;
-  index:      number;
+  index:      number;       // position in the constraints array; drives the colour dot
   onChange:   (c: Constraint) => void;
   onRemove:   () => void;
 }
 
+/**
+ * Maps each sense symbol to a distinct colour for the sense <select> element.
+ * Kept separate from CONSTRAINT_COLORS (which cycles by index) because the
+ * sense colour is a fixed semantic cue, not a positional one.
+ */
 const SENSE_COLORS: Record<ConstraintSense, string> = {
   [ConstraintSense.LE]: '#60a5fa',
   [ConstraintSense.GE]: '#a78bfa',
   [ConstraintSense.EQ]: '#34d399',
 };
 
+/**
+ * A single constraint row: [●] [cx] x + [cy] y [sense] [rhs] [×]
+ *
+ * The coloured dot matches the corresponding line on the plot. Coefficient and
+ * RHS inputs use NumberInput for deferred-commit behaviour. The sense dropdown
+ * updates immediately (no ambiguous partial state).
+ *
+ * Memoised: re-renders only when its own constraint, index, or callbacks change.
+ */
 export const ConstraintRow = memo(function ConstraintRow({
   constraint,
   index,
