@@ -22,7 +22,10 @@ import {
   parseConstraintSense,
   parseObjectiveSense,
   CONSTRAINT_COLORS,
+  formatLinearExpr,
+  isNonzeroConstraint,
 } from './types';
+import { isOutOfViewport } from './graph';
 import type { Constraint, LPResult, Objective } from './types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -31,8 +34,7 @@ const TOL = 1e-6;
 const near = (a: number, b: number) => expect(a).toBeCloseTo(b, 6);
 const unitLength = (x: number, y: number) => near(Math.sqrt(x * x + y * y), 1.0);
 
-let _id = 0;
-const uid = () => String(_id++);
+const uid = () => crypto.randomUUID();
 const le = (cx: number, cy: number, rhs: number): Constraint =>
   ({ id: uid(), coeffX: cx, coeffY: cy, sense: ConstraintSense.LE, rhs });
 const ge = (cx: number, cy: number, rhs: number): Constraint =>
@@ -161,11 +163,18 @@ describe('Solver — optimal coordinates', () => {
     near(r.solution!.point[1], 3);
   });
 
-  it('max 6x+9y default → (0,4)', () => {
+  it('max 6x+9y default → optimal value 36 (degenerate: (0,4) and (3,2) are co-optimal)', () => {
+    // Both (0,4) and (3,2) achieve objective value 36. The pivot rule determines which
+    // vertex is returned; we verify feasibility and optimality rather than a specific point.
     const r = solveLp({sense:ObjectiveSense.MAX,coeffX:6,coeffY:9},
       [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)]);
-    near(r.solution!.point[0], 0);
-    near(r.solution!.point[1], 4);
+    expect(r.status).toBe(OptimizerStatus.OPTIMAL);
+    near(r.solution!.objectiveValue, 36);
+    const [x, y] = r.solution!.point;
+    expect(x).toBeGreaterThanOrEqual(-TOL);
+    expect(y).toBeGreaterThanOrEqual(-TOL);
+    expect(2*x + 3*y).toBeLessThanOrEqual(12 + TOL);
+    expect(x + y).toBeLessThanOrEqual(5 + TOL);
   });
 
   it('max x+y symmetric constraints → (1,1)', () => {
@@ -379,8 +388,8 @@ describe('Graph — buildLayout: structure', () => {
     expect(layout.yaxis!.range).toEqual(Y_RANGE);
   });
 
-  it('shape count equals constraint count', () => {
-    expect((layout.shapes ?? []).length).toBe(cs.length);
+  it('shape count equals non-trivial constraint count (trivial constraints are filtered)', () => {
+    expect((layout.shapes ?? []).length).toBe(cs.length); // all cs are non-trivial here
   });
 
   it('exactly one annotation', () => {
@@ -433,7 +442,9 @@ describe('Graph — buildLayout: colour palette wraps at index 7', () => {
 });
 
 describe('Graph — buildData', () => {
-  it('OPTIMAL: one scatter trace at the solution point', () => {
+  it('OPTIMAL: one scatter trace at a feasible optimal point', () => {
+    // This LP (max 6x+9y) is degenerate: (0,4) and (3,2) are co-optimal at value 36.
+    // Verify the trace exists and the point is optimal, not a specific vertex.
     const result = solveLp(
       { sense: ObjectiveSense.MAX, coeffX: 6, coeffY: 9 },
       [le(2,3,12),le(1,1,5),ge(1,0,0),ge(0,1,0)],
@@ -442,8 +453,12 @@ describe('Graph — buildData', () => {
     expect(data.length).toBe(1);
     const trace = data[0] as Record<string, unknown>;
     expect(trace['type']).toBe('scatter');
-    expect((trace['x'] as number[])[0]).toBeCloseTo(0);
-    expect((trace['y'] as number[])[0]).toBeCloseTo(4);
+    const x = (trace['x'] as number[])[0];
+    const y = (trace['y'] as number[])[0];
+    // Both co-optimal vertices score 36.
+    expect(6*x + 9*y).toBeCloseTo(36, 6);
+    expect(x).toBeGreaterThanOrEqual(-1e-6);
+    expect(y).toBeGreaterThanOrEqual(-1e-6);
   });
 
   it.each([OptimizerStatus.UNBOUNDED, OptimizerStatus.INFEASIBLE, OptimizerStatus.NONE])(
@@ -528,9 +543,153 @@ describe('resultLabel', () => {
   it.each([
     [OptimizerStatus.UNBOUNDED,  'unbounded'],
     [OptimizerStatus.INFEASIBLE, 'infeasible'],
-    [OptimizerStatus.FEASIBLE,   'feasible'],
     [OptimizerStatus.NONE,       'not been solved'],
   ] as const)('%s contains "%s"', (status, keyword) => {
     expect(resultLabel({ status, solution: null }).toLowerCase()).toContain(keyword);
+  });
+
+  it('FEASIBLE throws — it is an internal status that must never reach the UI', () => {
+    expect(() => resultLabel({ status: OptimizerStatus.FEASIBLE, solution: null })).toThrow();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 11. formatLinearExpr
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('formatLinearExpr', () => {
+  it.each([
+    [2,    3,   '2x + 3y'],
+    [2,   -3,   '2x \u2212 3y'],
+    [-2,   3,   '\u22122x + 3y'],
+    [-2,  -3,   '\u22122x \u2212 3y'],
+    [1,   -1,   'x \u2212 y'],
+    [-1,   1,   '\u2212x + y'],
+    [1,    1,   'x + y'],
+    [0,    4,   '4y'],
+    [3,    0,   '3x'],
+    [0,   -5,   '\u22125y'],
+    [-3,   0,   '\u22123x'],
+    [0,    0,   '0'],
+  ] as const)('(%s, %s) → "%s"', (cx, cy, expected) => {
+    expect(formatLinearExpr(cx, cy)).toBe(expected);
+  });
+
+  it('treats sub-EPSILON values as zero (consistent with isNonzeroConstraint)', () => {
+    // 1e-12 is below EPSILON (1e-9) — should be treated as zero
+    expect(formatLinearExpr(1e-12, 0)).toBe('0');
+    expect(formatLinearExpr(0, 1e-12)).toBe('0');
+    expect(formatLinearExpr(1e-12, 1e-12)).toBe('0');
+    // 1e-8 is above EPSILON — should appear
+    expect(formatLinearExpr(1e-8, 0)).not.toBe('0');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 12. isNonzeroConstraint
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('isNonzeroConstraint', () => {
+  const make = (cx: number, cy: number): Parameters<typeof isNonzeroConstraint>[0] => ({
+    id: uid(), coeffX: cx, coeffY: cy, sense: ConstraintSense.LE, rhs: 0,
+  });
+
+  it('returns true when x coefficient is non-zero', () => {
+    expect(isNonzeroConstraint(make(1, 0))).toBe(true);
+  });
+
+  it('returns true when y coefficient is non-zero', () => {
+    expect(isNonzeroConstraint(make(0, 1))).toBe(true);
+  });
+
+  it('returns true when both coefficients are non-zero', () => {
+    expect(isNonzeroConstraint(make(2, -3))).toBe(true);
+  });
+
+  it('returns false when both coefficients are exactly zero', () => {
+    expect(isNonzeroConstraint(make(0, 0))).toBe(false);
+  });
+
+  it('returns false when both coefficients are within EPSILON', () => {
+    expect(isNonzeroConstraint(make(1e-12, 1e-12))).toBe(false);
+  });
+
+  it('returns true when a coefficient is just above EPSILON', () => {
+    expect(isNonzeroConstraint(make(1e-8, 0))).toBe(true);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 13. isOutOfViewport
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('isOutOfViewport', () => {
+  it('returns false for a point well within the viewport', () => {
+    expect(isOutOfViewport([2, 2])).toBe(false);
+  });
+
+  it('returns false for the origin', () => {
+    expect(isOutOfViewport([0, 0])).toBe(false);
+  });
+
+  it('returns true for a point beyond X_RANGE max', () => {
+    expect(isOutOfViewport([100, 0])).toBe(true);
+  });
+
+  it('returns true for a point below X_RANGE min', () => {
+    expect(isOutOfViewport([-10, 0])).toBe(true);
+  });
+
+  it('returns true for a point beyond Y_RANGE max', () => {
+    expect(isOutOfViewport([0, 100])).toBe(true);
+  });
+
+  it('returns true for a point below Y_RANGE min', () => {
+    expect(isOutOfViewport([0, -10])).toBe(true);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 14. buildLayout — trivial constraints and zero-objective arrow
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('Graph — buildLayout: trivial constraints are excluded from shapes', () => {
+  it('a zero-coefficient constraint produces no shape', () => {
+    const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 1 };
+    const cs = [
+      le(1, 0, 3),                           // non-trivial → shape
+      { id: uid(), coeffX: 0, coeffY: 0, sense: ConstraintSense.LE, rhs: 0 }, // trivial → no shape
+      le(0, 1, 4),                           // non-trivial → shape
+    ];
+    const shapes = buildLayout(obj, cs).shapes ?? [];
+    expect(shapes.length).toBe(2);  // only the two non-trivial constraints
+  });
+
+  it('preserves original constraint colours when a trivial constraint is present', () => {
+    // Trivial constraint at index 1 is filtered; the remaining two should use
+    // colours at their original indices (0 and 2), not re-indexed 0 and 1.
+    const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 1 };
+    const cs = [
+      le(1, 0, 3),
+      { id: uid(), coeffX: 0, coeffY: 0, sense: ConstraintSense.LE, rhs: 0 },
+      le(0, 1, 4),
+    ];
+    const shapes = (buildLayout(obj, cs).shapes ?? []) as Array<Record<string, unknown>>;
+    expect((shapes[0]['line'] as Record<string, unknown>)['color']).toBe(CONSTRAINT_COLORS[0]);
+    expect((shapes[1]['line'] as Record<string, unknown>)['color']).toBe(CONSTRAINT_COLORS[2]);
+  });
+});
+
+describe('Graph — buildLayout: zero objective vector suppresses the arrow', () => {
+  it('zero objective has no annotations', () => {
+    const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 0, coeffY: 0 };
+    const annotations = buildLayout(obj, []).annotations ?? [];
+    expect(annotations.length).toBe(0);
+  });
+
+  it('non-zero objective still has one annotation', () => {
+    const obj: Objective = { sense: ObjectiveSense.MAX, coeffX: 1, coeffY: 0 };
+    const annotations = buildLayout(obj, []).annotations ?? [];
+    expect(annotations.length).toBe(1);
   });
 });

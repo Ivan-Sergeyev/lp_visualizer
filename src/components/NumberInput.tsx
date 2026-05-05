@@ -6,6 +6,16 @@ interface NumberInputProps {
   placeholder?: string;
   className?:   string;
   step?:        number;
+  'aria-label'?: string;
+}
+
+/**
+ * Parses a raw input string to a number, returning NaN for empty strings or
+ * strings with non-numeric content (e.g. "3abc"). Uses Number() rather than
+ * parseFloat() so that trailing garbage is rejected rather than silently ignored.
+ */
+function parseInputValue(raw: string): number {
+  return raw.trim() === '' ? NaN : Number(raw);
 }
 
 /**
@@ -16,7 +26,7 @@ interface NumberInputProps {
  * If the committed string cannot be parsed as a number, the input reverts to the
  * last valid value received from the parent.
  */
-export function NumberInput({ value, onChange, placeholder, className, step = 1 }: NumberInputProps) {
+export function NumberInput({ value, onChange, placeholder, className, step = 1, 'aria-label': ariaLabel }: NumberInputProps) {
   const [local, setLocal] = useState(String(value));
 
   // Keep local state in sync when the parent changes value externally (e.g. a
@@ -26,7 +36,7 @@ export function NumberInput({ value, onChange, placeholder, className, step = 1 
   }, [value]);
 
   function commit(raw: string) {
-    const parsed = parseFloat(raw);
+    const parsed = parseInputValue(raw);
     if (!isNaN(parsed)) onChange(parsed);
     else setLocal(String(value)); // revert to last valid value
   }
@@ -34,11 +44,11 @@ export function NumberInput({ value, onChange, placeholder, className, step = 1 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value;
     setLocal(raw);
-    // Commit immediately when the value is valid. This makes spinner arrow clicks
-    // propagate to the parent right away (they fire onChange but not onBlur).
-    // Partial strings like '−' fail parseFloat and are left in local state only,
+    // Commit immediately when the value is valid so spinner arrow clicks propagate
+    // to the parent right away (they fire onChange but not onBlur).
+    // Partial strings like '-' return NaN from parseInputValue and stay local only,
     // preserving the deferred-commit behaviour for keyboard entry.
-    const parsed = parseFloat(raw);
+    const parsed = parseInputValue(raw);
     if (!isNaN(parsed)) onChange(parsed);
   }
 
@@ -49,6 +59,7 @@ export function NumberInput({ value, onChange, placeholder, className, step = 1 
       value={local}
       placeholder={placeholder}
       step={step}
+      aria-label={ariaLabel}
       onChange={handleChange}
       onBlur={e => commit(e.target.value)}
       onKeyDown={e => { if (e.key === 'Enter') commit((e.target as HTMLInputElement).value); }}

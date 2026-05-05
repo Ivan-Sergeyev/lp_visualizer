@@ -47,15 +47,22 @@ describe('onChange (spinner arrow path)', () => {
     expect(onChange).toHaveBeenLastCalledWith(2);
   });
 
-  it('does NOT call the parent for a lone minus sign (partial value)', () => {
+  it('does NOT call onChange for a lone minus sign (partial value)', () => {
     const { input, onChange } = setup(0);
     fireEvent.change(input, { target: { value: '-' } });
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('does NOT call the parent for an empty string', () => {
+  it('does NOT call onChange for an empty string', () => {
     const { input, onChange } = setup(5);
     fireEvent.change(input, { target: { value: '' } });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call onChange for "3abc" — trailing garbage must be rejected (Number() fix)', () => {
+    // parseFloat("3abc") → 3; Number("3abc") → NaN. We verify Number() semantics.
+    const { input, onChange } = setup(0);
+    fireEvent.change(input, { target: { value: '3abc' } });
     expect(onChange).not.toHaveBeenCalled();
   });
 

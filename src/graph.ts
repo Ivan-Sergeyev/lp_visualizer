@@ -1,5 +1,5 @@
 import type { Config, Data, Layout, Shape, Annotations } from 'plotly.js';
-import { OptimizerStatus, CONSTRAINT_COLORS } from './types';
+import { OptimizerStatus, CONSTRAINT_COLORS, EPSILON, isNonzeroConstraint } from './types';
 import type { Constraint, LPResult, Objective } from './types';
 import { lineBoxedEndpoints, objectiveUnitVector } from './geometry';
 
@@ -15,7 +15,33 @@ export const Y_RANGE: [number, number] = [-1, 4];
 const BL = { x: X_RANGE[0], y: Y_RANGE[0] };
 const TR = { x: X_RANGE[1], y: Y_RANGE[1] };
 
+/**
+ * Returns true when the point lies outside the visible plot viewport.
+ * Used to display a warning when the optimal solution is off-screen.
+ */
+export function isOutOfViewport(point: [number, number]): boolean {
+  const [x, y] = point;
+  return x < X_RANGE[0] || x > X_RANGE[1] || y < Y_RANGE[0] || y > Y_RANGE[1];
+}
+
 // ── Static Plotly config ──────────────────────────────────────────────────────
+
+/**
+ * Plotly theme tokens — kept in sync with the CSS custom properties in index.css.
+ * Centralised here so a palette change requires editing a single object, not
+ * hunting down scattered hex literals throughout buildLayout.
+ */
+const THEME = {
+  bgPaper:  '#161b22',               // --surface
+  bgPlot:   '#0d1117',               // --bg
+  grid:     '#1e2733',
+  zeroline: '#30363d',               // --border2
+  tick:     '#8b949e',               // --muted
+  fontMono: "'IBM Plex Mono', monospace",  // --font-mono
+  fontSer:  "'EB Garamond', serif",        // --font-ser
+  hover:    { bg: '#1c2333', border: '#30363d', text: '#e6edf3' },
+  amber:    '#fbbf24',
+} as const;
 
 /**
  * Plotly UI config shared across all renders.
@@ -49,7 +75,7 @@ function constraintShape(c: Constraint, index: number): Partial<Shape> {
 function objectiveAnnotation(obj: Objective): Partial<Annotations> {
   const tip = objectiveUnitVector(obj);
   return {
-    arrowcolor: '#fbbf24',
+    arrowcolor: THEME.amber,
     arrowhead: 3,
     arrowwidth: 2.5,
     showarrow: true,
@@ -67,33 +93,54 @@ function objectiveAnnotation(obj: Objective): Partial<Annotations> {
  * Builds the Plotly layout (axes, constraint lines, objective arrow) from the
  * current LP definition. Memoised independently of the solver result so it only
  * recomputes when the objective or constraints change.
+ *
+ * Trivial constraints (both coefficients zero) are excluded from `shapes` —
+ * they produce no line on the plot. The objective arrow annotation is suppressed
+ * when the objective vector is zero (no meaningful direction to show).
  */
 export function buildLayout(
   objective: Objective,
   constraints: Constraint[],
 ): Partial<Layout> {
+  // Pre-compute the objective direction to decide whether to show the arrow.
+  // The zero check mirrors isNonzeroConstraint: both use EPSILON for consistency.
+  const tip          = objectiveUnitVector(objective);
+  const showArrow    = Math.abs(tip.x) > EPSILON || Math.abs(tip.y) > EPSILON;
+
+  // Filter trivial constraints but preserve original indices so shape colours
+  // stay in sync with the legend (which colours by position in the full array).
+  const nonTrivial = constraints
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => isNonzeroConstraint(c));
+
   return {
-    paper_bgcolor: '#161b22',
-    plot_bgcolor:  '#0d1117',
+    paper_bgcolor: THEME.bgPaper,
+    plot_bgcolor:  THEME.bgPlot,
     xaxis: {
       range: X_RANGE,
-      gridcolor: '#1e2733', zerolinecolor: '#30363d',
-      tickfont: { color: '#8b949e', family: "'IBM Plex Mono', monospace", size: 11 },
-      linecolor: '#30363d',
-      title: { text: 'x', font: { color: '#8b949e', family: "'EB Garamond', serif", size: 14 } },
+      gridcolor:    THEME.grid,
+      zerolinecolor: THEME.zeroline,
+      linecolor:     THEME.zeroline,
+      tickfont: { color: THEME.tick, family: THEME.fontMono, size: 11 },
+      title: { text: 'x', font: { color: THEME.tick, family: THEME.fontSer, size: 14 } },
     },
     yaxis: {
       range: Y_RANGE,
-      gridcolor: '#1e2733', zerolinecolor: '#30363d',
-      tickfont: { color: '#8b949e', family: "'IBM Plex Mono', monospace", size: 11 },
-      linecolor: '#30363d',
-      title: { text: 'y', font: { color: '#8b949e', family: "'EB Garamond', serif", size: 14 } },
+      gridcolor:    THEME.grid,
+      zerolinecolor: THEME.zeroline,
+      linecolor:     THEME.zeroline,
+      tickfont: { color: THEME.tick, family: THEME.fontMono, size: 11 },
+      title: { text: 'y', font: { color: THEME.tick, family: THEME.fontSer, size: 14 } },
     },
-    shapes:      constraints.map((c, i) => constraintShape(c, i)),
-    annotations: [objectiveAnnotation(objective)],
+    shapes:      nonTrivial.map(({ c, i }) => constraintShape(c, i)),
+    annotations: showArrow ? [objectiveAnnotation(objective)] : [],
     margin:   { l: 52, r: 24, t: 24, b: 52 },
     dragmode: 'pan',
-    hoverlabel: { bgcolor: '#1c2333', bordercolor: '#30363d', font: { color: '#e6edf3' } },
+    hoverlabel: {
+      bgcolor:     THEME.hover.bg,
+      bordercolor: THEME.hover.border,
+      font: { color: THEME.hover.text },
+    },
   };
 }
 
@@ -111,7 +158,9 @@ export function buildData(result: LPResult): Partial<Data>[] {
     x: [x], y: [y],
     mode: 'markers',
     marker: { color: '#4ade80', size: 14, symbol: 'circle', line: { color: '#0f1117', width: 2 } },
-    hovertemplate: `<b>Optimal</b><br>x = ${x.toFixed(3)}<br>y = ${y.toFixed(3)}<extra></extra>`,
+    // Plotly format directives keep the template a stable string constant — values
+    // are injected by Plotly at hover time rather than baked in at render time.
+    hovertemplate: '<b>Optimal</b><br>x = %{x:.3f}<br>y = %{y:.3f}<extra></extra>',
     showlegend: false,
   } as Partial<Data>];
 }

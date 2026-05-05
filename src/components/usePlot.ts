@@ -18,15 +18,20 @@ export function usePlot(
 ): RefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Empty deps: runs once per mount. Captures the element in `el` so the cleanup
-  // closure holds the reference even after the component unmounts and ref.current
-  // is cleared.
+  // Mount-only effect: initialise Plotly on the first render and purge on unmount.
+  // The purge in the cleanup makes React 18 StrictMode's double-invoke safe —
+  // the second mount always gets a clean DOM element.
+  //
+  // data / layout / config are intentionally absent from the dep array.
+  // Updates are handled entirely by the second effect (Plotly.react), which runs
+  // after every figure change. Adding the figure deps here would cause a redundant
+  // newPlot → purge → newPlot cycle on the very first render.
   useEffect(() => {
     if (!ref.current) return;
     Plotly.newPlot(ref.current, data, layout, config);
     const el = ref.current;
     return () => { Plotly.purge(el); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see block comment above
   }, []);
 
   // Runs whenever data, layout, or config changes. `Plotly.react` is a diff-aware
@@ -36,14 +41,18 @@ export function usePlot(
     Plotly.react(ref.current, data, layout, config);
   }, [data, layout, config]);
 
-  // Separate effect so the resize listener is registered once and never torn down
-  // and re-added on figure changes.
+  // Observe the plot container with a ResizeObserver so the chart reflowes
+  // whenever the container changes size — not only when the browser window does.
+  // This is more precise than `window.addEventListener('resize', ...)`, which
+  // misses layout-driven resizes (e.g. a collapsible side panel).
   useEffect(() => {
-    function handleResize() {
-      if (ref.current) Plotly.Plots.resize(ref.current);
-    }
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    if (!ref.current) return;
+    const el = ref.current;
+    const ro = new ResizeObserver(() => {
+      Plotly.Plots.resize(el);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   return ref;

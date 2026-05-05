@@ -39,6 +39,40 @@ export function parseConstraintSense(v: string): ConstraintSense {
   return match;
 }
 
+/**
+ * Formats a linear expression aX + bY as a human-readable string with proper
+ * signs — e.g. "2x − 3y" instead of "2x + -3y". Coefficients of ±1 are shown
+ * without the numeric part (e.g. "x", "−y"). Returns "0" when both are zero.
+ */
+export function formatLinearExpr(coeffX: number, coeffY: number): string {
+  const terms: string[] = [];
+
+  function addTerm(coeff: number, varName: string): void {
+    if (Math.abs(coeff) < EPSILON) return;  // consistent with isNonzeroConstraint
+    const abs    = Math.abs(coeff);
+    const numStr = abs === 1 ? varName : `${abs}${varName}`;
+    if (terms.length === 0) {
+      terms.push(coeff < 0 ? `\u2212${numStr}` : numStr);  // − or plain first term
+    } else {
+      terms.push(coeff < 0 ? `\u2212 ${numStr}` : `+ ${numStr}`);
+    }
+  }
+
+  addTerm(coeffX, 'x');
+  addTerm(coeffY, 'y');
+  return terms.length === 0 ? '0' : terms.join(' ');
+}
+
+/**
+ * Returns true when at least one coefficient is non-zero, meaning this
+ * constraint defines a visible line on the plot. Constraints where both
+ * coefficients are zero are trivially satisfied (or infeasible) for any (x, y)
+ * and produce no line — their legend entry is shown dimmed.
+ */
+export function isNonzeroConstraint(c: Constraint): boolean {
+  return Math.abs(c.coeffX) > EPSILON || Math.abs(c.coeffY) > EPSILON;
+}
+
 // ── Objective ─────────────────────────────────────────────────────────────────
 
 /** Whether the objective is minimised or maximised. */
@@ -67,7 +101,14 @@ export interface Objective {
 
 // ── Result ────────────────────────────────────────────────────────────────────
 
-/** Solver outcome. FEASIBLE is intermediate (feasible basis found, phase 2 not yet run). */
+/**
+ * Solver outcome returned by `solveLp`.
+ *
+ * `FEASIBLE` is an **internal** intermediate state used inside `SimplexSolver`
+ * to signal "phase 1 succeeded; phase 2 not yet run." It is never returned by
+ * `solveLp` — the public function always resolves to OPTIMAL, UNBOUNDED,
+ * INFEASIBLE, or NONE.
+ */
 export const OptimizerStatus = {
   OPTIMAL:    'optimal',
   UNBOUNDED:  'unbounded',
@@ -99,7 +140,13 @@ export function resultLabel(r: LPResult): string {
     }
     case OptimizerStatus.UNBOUNDED:  return 'Linear program is unbounded';
     case OptimizerStatus.INFEASIBLE: return 'Linear program is infeasible';
-    case OptimizerStatus.FEASIBLE:   return 'Linear program is feasible';
+    case OptimizerStatus.FEASIBLE:
+      // FEASIBLE is an internal intermediate state; solveLp never returns it.
+      // Reaching this branch means a bug in the caller — throw rather than silently
+      // returning a misleading label.
+      throw new Error(
+        'resultLabel: FEASIBLE is an internal solver status and should never reach the UI',
+      );
     default:                         return 'Linear program has not been solved yet';
   }
 }

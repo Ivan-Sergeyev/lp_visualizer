@@ -113,14 +113,18 @@ class SimplexTableau {
     return true;
   }
 
-  /** Returns the column index of the most negative reduced cost (pivot column selection). */
-  getIndexSmallestCost(): number {
+  /**
+   * Returns the column index of the first negative reduced cost (Bland's rule).
+   * Bland's rule — choosing the lowest-indexed entering variable rather than the
+   * most-negative cost — guarantees finite termination by preventing cycling on
+   * degenerate problems.
+   */
+  getEnteringColumn(): number {
     const obj = this.tableau[this.tableau.length - 1];
-    let minIdx = 1;
-    for (let j = 2; j < obj.length; j++) {
-      if (obj[j] < obj[minIdx]) minIdx = j;
+    for (let j = 1; j < obj.length; j++) {
+      if (obj[j] < -EPSILON) return j;
     }
-    return minIdx;
+    return 1; // no negative cost; caller checks obj[j] ≥ -EPSILON and exits as OPTIMAL
   }
 
   getObjectiveRow(): number[]  { return this.tableau[this.tableau.length - 1]; }
@@ -130,18 +134,28 @@ class SimplexTableau {
   numCols(): number            { return this.tableau[0]?.length ?? 0; }
 
   /**
-   * Returns the row index that minimises RHS/entry for column `col` (minimum ratio test).
-   * Only rows with a positive entry in `col` are considered. Returns null if none exist,
-   * indicating the problem is unbounded in that direction.
+   * Returns the row index for the minimum-ratio test on column `col`, using
+   * Bland's tie-breaking rule: when two rows yield the same ratio, the one whose
+   * current basis variable has the lower column index is chosen. This completes
+   * the anti-cycling guarantee begun by getEnteringColumn.
+   *
+   * Returns null if no row has a positive entry in `col`, indicating the LP is
+   * unbounded in that direction.
    */
-  minRatio(col: number): number | null {
-    let minR = Infinity;
+  minRatio(col: number, basis: number[]): number | null {
+    let minR   = Infinity;
     let minRow: number | null = null;
+    let minBv  = Infinity;  // lowest basis-variable index among tied rows
+
     for (let row = 0; row < this.numConstraints; row++) {
       const entry = this.tableau[row][col];
       if (entry > EPSILON) {
         const ratio = this.getRhs(row) / entry;
-        if (ratio < minR) { minR = ratio; minRow = row; }
+        const bv    = basis[row];
+        // Prefer strictly smaller ratio; break ties by lowest basis-variable index.
+        if (ratio < minR - EPSILON || (Math.abs(ratio - minR) < EPSILON && bv < minBv)) {
+          minR = ratio; minRow = row; minBv = bv;
+        }
       }
     }
     return minRow;
@@ -223,7 +237,13 @@ class SimplexTableau {
     this.tableau = this.tableau.map(row => keep.map(j => row[j]));
 
     const colMap = new Map(keep.map((oldJ, newJ) => [oldJ, newJ]));
-    return basis.map(bv => colMap.get(bv)!);
+    return basis.map(bv => {
+      const newIdx = colMap.get(bv);
+      if (newIdx === undefined) {
+        throw new Error(`Simplex teardown: basis variable ${bv} not found in kept columns — this is a bug.`);
+      }
+      return newIdx;
+    });
   }
 }
 
@@ -261,11 +281,11 @@ class SimplexSolver {
   /** Runs the simplex pivot loop until optimal or unbounded. */
   private iterate(): OptimizerStatus {
     while (true) {
-      const enterCol = this.tableau.getIndexSmallestCost();
+      const enterCol = this.tableau.getEnteringColumn();
       if (this.tableau.getObjectiveRow()[enterCol] >= -EPSILON) {
         return OptimizerStatus.OPTIMAL;
       }
-      const leaveRow = this.tableau.minRatio(enterCol);
+      const leaveRow = this.tableau.minRatio(enterCol, this.basis);
       if (leaveRow === null) return OptimizerStatus.UNBOUNDED;
       this.tableau.pivot(leaveRow, enterCol);
       this.basis[leaveRow] = enterCol;
@@ -292,7 +312,15 @@ class SimplexSolver {
   /** Runs phase 1: finds a BFS or declares the problem infeasible. */
   private phase1(): void {
     this.phase1Setup();
-    this.iterate();
+    const p1Status = this.iterate();
+
+    // The auxiliary problem's feasible region is bounded (artificial variables
+    // are bounded by the constraint RHS values), so UNBOUNDED cannot happen.
+    // Guard defensively in case a future refactor breaks that invariant.
+    if (p1Status === OptimizerStatus.UNBOUNDED) {
+      this.status = OptimizerStatus.INFEASIBLE;
+      return;
+    }
 
     // A non-zero phase 1 objective value means some artificial variable stayed positive,
     // i.e. the original constraints have no feasible point.
@@ -308,9 +336,13 @@ class SimplexSolver {
   /**
    * Reconstructs the (x, y) solution from the current basis.
    * x = x⁺ (col 1) − x⁻ (col 2); y = y⁺ (col 3) − y⁻ (col 4).
-   * The stored objective value is negated back for MIN problems (the tableau
-   * always minimises, so a MIN objective was stored as-is while a MAX objective
-   * was negated on entry).
+   *
+   * Sign convention for the objective value stored in the tableau RHS:
+   *  - MAX: canonical coefficients are negated on entry (−cx, −cy), so during
+   *    pivoting the RHS accumulates to +max_value. No post-processing needed.
+   *  - MIN: canonical coefficients are unchanged (cx, cy), and the RHS
+   *    accumulates to −min_value as pivot rows are subtracted. We negate once
+   *    to recover the true minimum.
    */
   private getSolution(): Solution | null {
     if (this.status !== OptimizerStatus.OPTIMAL) return null;
@@ -363,7 +395,13 @@ class SimplexSolver {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/** Solves a 2-variable LP and returns the status and optimal solution (if one exists). */
+/**
+ * Solves a 2-variable LP and returns the status and optimal solution (if one exists).
+ *
+ * The returned status is always OPTIMAL, UNBOUNDED, INFEASIBLE, or NONE.
+ * FEASIBLE is an internal intermediate state inside SimplexSolver and is never
+ * returned here.
+ */
 export function solveLp(obj: Objective, constraints: Constraint[]): LPResult {
   return SimplexSolver.solve(obj, constraints);
 }
