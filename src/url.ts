@@ -9,7 +9,7 @@
  * `window`) and safe to call in non-browser environments (they return null / no-op).
  */
 
-import { ConstraintSense, ObjectiveSense, parseObjectiveSense } from './types';
+import { ConstraintSense, parseObjectiveSense } from './types';
 import type { Constraint, Objective } from './types';
 
 // ── Sense ↔ URL-code maps ──────────────────────────────────────────────────────
